@@ -35,16 +35,42 @@ test_cases = {
     "consecutive_numbers_and_letters": ("abc123XYZ", "abc123_xyz"),
     "leading_numbers": ("123LeadingNumbers", "123_leading_numbers"),
     "trailing_numbers": ("TrailingNumbers123", "trailing_numbers123"),
+    "none_case": (None, None),
+    "double_underscore_init": ("__init__", "init"),
+    "double_underscore_Init": ("__Init__", "init"),
+    "double_underscore_INIT": ("__INIT__", "init"),
+    "double_underscore_INITok": ("__INITok__", "ini_tok"),
+    "double_underscore_INIT_ok": ("__INIT_ok__", "init_ok"),
+    "single_word_capitalized": ("Toto", "toto"),
+    "two_words_capitalized": ("TotoTata", "toto_tata"),
+    "three_words_capitalized": ("TotoTataTiti", "toto_tata_titi"),
+    "four_words_with_underscores": ("Toto_Tata_Titi_Tata", "toto_tata_titi_tata"),
+    "mixed_case_capitals": ("TotoTATAtiti", "toto_tat_atiti"),
+    "hello_world": ("HelloWorld", "hello_world"),
+    "xml_http_request": ("XMLHttpRequest", "xml_http_request"),
+    "get_http_response_code": ("getHTTPResponseCode", "get_http_response_code"),
+    "get_2_http_responses": ("get2HTTPResponses", "get2_http_responses"),
+    "get_http_2_responses": ("getHTTP2Responses", "get_http2_responses"),
+    "already_snake_case": ("already_snake_case", "already_snake_case"),
+    "this_is_a_test": ("ThisIsATest", "this_is_a_test"),
+    "single_A": ("A", "a"),
+    "double_AA": ("AA", "aa"),
+    "triple_AAA": ("AAA", "aaa"),
+    "mixed_case_aaaAAA": ("aaaAAA", "aaa_aaa"),
+    "hello_double_underscore_world": ("Hello__World", "hello_world"),
+    "hello_dash_world": ("Hello-World", "hello_world"),
+    "mj_is_a_boy_with_legs": ("MJ_is_aBoyWith2Legs", "mj_is_a_boy_with2_legs"),
 }
 
 for name, value in test_cases.items():
     input_value = value[0]
     expected_value = value[1]
-
-    print(f"Test ({name}) : to_snake_case({input_value})")
-
     result = to_snake_case(input_value)
 
-    print(f"\tExpected ({expected_value}) => {(result == expected_value)}")
+    print(
+        f"Test ({name}) : to_snake_case({input_value}) : {(result == expected_value)}"
+    )
+    print(f"-Expected : ({expected_value})")
+    print(f"-Result : ({result}) => {(result == expected_value)}")
 
     assert result == expected_value
