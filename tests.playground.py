@@ -71,6 +71,6 @@ for name, value in test_cases.items():
         f"Test ({name}) : to_snake_case({input_value}) : {(result == expected_value)}"
     )
     print(f"-Expected : ({expected_value})")
-    print(f"-Result : ({result}) => {(result == expected_value)}")
+    print(f"-Result : ({result})")
 
     assert result == expected_value
