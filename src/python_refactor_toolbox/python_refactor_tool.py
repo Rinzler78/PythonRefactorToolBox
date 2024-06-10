@@ -46,15 +46,15 @@ def update_imports(filepath, old_class_name, new_module_name):
         tree = ast.parse(file.read())
 
     for node in tree.body:
-        if isinstance(node, ast.ImportFrom):
-            for alias in node.names:
-                if alias.name == old_class_name:
-                    alias.name = new_module_name
-        elif isinstance(node, ast.Import):
-            for alias in node.names:
-                if alias.name == old_class_name:
-                    alias.name = new_module_name
-
+        for alias in node.names:
+            if (
+                isinstance(node, ast.ImportFrom)
+                and alias.name == old_class_name
+                or not isinstance(node, ast.ImportFrom)
+                and isinstance(node, ast.Import)
+                and alias.name == old_class_name
+            ):
+                alias.name = new_module_name
     updated_code = ast.unparse(tree)
 
     with open(filepath, "w") as file:
@@ -63,10 +63,9 @@ def update_imports(filepath, old_class_name, new_module_name):
 
 def is_code_dependent_on_class(code, class_name):
     tree = ast.parse(code)
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Name) and node.id == class_name:
-            return True
-    return False
+    return any(
+        isinstance(node, ast.Name) and node.id == class_name for node in ast.walk(tree)
+    )
 
 
 def remove_unused_imports(code, imports):
@@ -81,16 +80,16 @@ def remove_unused_imports(code, imports):
 
     new_imports = []
     for imp in imports:
-        if isinstance(imp, ast.Import):
-            for alias in imp.names:
-                if alias.name in used_imports:
-                    new_imports.append(imp)
-                    break
-        elif isinstance(imp, ast.ImportFrom):
-            for alias in imp.names:
-                if alias.name in used_imports:
-                    new_imports.append(imp)
-                    break
+        for alias in imp.names:
+            if (
+                isinstance(imp, ast.Import)
+                and alias.name in used_imports
+                or not isinstance(imp, ast.Import)
+                and isinstance(imp, ast.ImportFrom)
+                and alias.name in used_imports
+            ):
+                new_imports.append(imp)
+                break
     imports.clear()
     for imp in new_imports:
         imports.append(imp)
@@ -163,12 +162,14 @@ def move_class_to_file(filepath):
 
         for dep_file in os.listdir(base_dir):
             dep_filepath = os.path.join(base_dir, dep_file)
-            if dep_filepath != filepath and dep_filepath.endswith(".py"):
-                dependencies = get_class_dependencies(dep_filepath, class_name)
-                if dependencies:
-                    update_imports(
-                        dep_filepath, class_name, class_filename.replace(".py", "")
-                    )
+            if (
+                dep_filepath != filepath
+                and dep_filepath.endswith(".py")
+                and get_class_dependencies(dep_filepath, class_name)
+            ):
+                update_imports(
+                    dep_filepath, class_name, class_filename.replace(".py", "")
+                )
 
 
 def move_class_to_file_from_directory(directory):
