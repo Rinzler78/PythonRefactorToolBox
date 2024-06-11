@@ -1,7 +1,6 @@
 import os
 from typing import List
 
-from .python_refactor_tool import compare_sources_directories
 from .SourceFile import SourceFile
 
 
@@ -11,9 +10,23 @@ class SourceDirectory:
 
     def __init__(self, path):
         self.__path = path
+        self.load()
 
-    def __eq__(self, other):
-        return compare_sources_directories(self.__path, other.path)
+    def __eq__(self, other) -> bool:
+        if not (other and isinstance(other, SourceDirectory)):
+            return False
+
+        if not (
+            self.source_files
+            and other.source_files
+            and len(self.source_files) == len(other.source_files)
+        ):
+            return False
+
+        return all(
+            self.source_files[i] == other.source_files[i]
+            for i in range(len(self.source_files))
+        )
 
     def __ne__(self, other):
         return not self.__eq__(other)
@@ -44,3 +57,5 @@ class SourceDirectory:
     def refactor(self):
         for file in self.source_files:
             file.refactor()
+
+        self.load()
