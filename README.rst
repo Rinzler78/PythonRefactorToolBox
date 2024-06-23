@@ -31,6 +31,7 @@
     :target: https://pyscaffold.org/
 
 |
+
 ========================
 python_refactor_tool_box
 ========================
@@ -55,6 +56,7 @@ Quick start
 .. code-block:: python
 
     from python_refactor_tool_box import SourceDirectory
+
     input_directory = "path/to/your/directory"
     input_source_directory = SourceDirectory(input_directory)
 
