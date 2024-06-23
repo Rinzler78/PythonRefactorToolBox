@@ -1,7 +1,7 @@
 import os
 from typing import List
 
-from .SourceFile import SourceFile
+from .source_file import SourceFile
 
 
 class SourceDirectory:

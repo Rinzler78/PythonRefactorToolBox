@@ -8,8 +8,7 @@ from helper import (
     samples_directory,
 )
 
-from python_refactor_toolbox.SourceDirectory import SourceDirectory
-from python_refactor_toolbox.SourceFile import SourceFile
+from python_refactor_tool_box import SourceDirectory, SourceFile
 
 
 class TestSourceFile(unittest.TestCase):
