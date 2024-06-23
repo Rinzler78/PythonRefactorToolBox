@@ -5,81 +5,7 @@ from typing import Dict, List, Set
 import astor
 import autopep8
 
-
-def refactor_file(path: str) -> bool:
-    if not os.path.exists(path):
-        print(f"File not found : {path}")
-        return False
-
-    print(f"Refactoring code from file : {path}")
-    with open(path) as file:
-        code = file.read()
-
-    refactored_code = refactor_code(code, path)
-
-    if should_delete_file(refactored_code):
-        os.remove(path)
-    else:
-        with open(path, "w") as file:
-            file.write(refactored_code)
-
-    return True
-
-
-def refactor_code(code: str, current_file_path: str) -> str:
-    # Extract elements from code
-    elements = extract_code_elements(code)
-    classes = get_classes_list(elements)
-    imports_list = get_import_list(elements)
-    import_from_list = get_import_from_list(elements)
-    directory = os.path.dirname(current_file_path)
-
-    i = 0
-
-    while i < len(classes):
-        class_node = classes[i]
-
-        class_name = class_node.name
-        module_name = generate_module_name(class_name)
-        target_file_path = os.path.join(directory, f"{module_name}.py")
-
-        print(f"Found class {class_name} :")
-        print(f"- Target module {module_name}. Target file {target_file_path}")
-
-        if current_file_path != target_file_path:
-            # Create the class code
-            required_imports = get_required_imports_for_class(
-                class_node, imports_list + import_from_list
-            )
-            class_code = create_class_code(class_node, required_imports)
-
-            # Save the class in the target module
-            save_new_module(current_file_path, target_file_path, class_code)
-
-            # Create the import to the class in the new module
-            new_import = create_import(module_name, class_name)
-            imports_list.insert(0, new_import)
-
-            # Remove class form code elements
-            remove_class_from_code_elements(class_node, elements)
-        else:
-            i += 1
-
-    required_imports = get_required_imports_for_code_elements(
-        elements, imports_list + import_from_list
-    )
-    imports_list.clear()
-    import_from_list.clear()
-
-    for imp in required_imports:
-        if isinstance(imp, ast.Import):
-            imports_list.append(imp)
-        elif isinstance(imp, ast.ImportFrom):
-            import_from_list.append(imp)
-
-    new_code = create_code_from_elements(elements)
-
-    return new_code
+from .snake_case import to_snake_case
 
 
 def format_code(code: str) -> str:
@@ -124,7 +50,7 @@ def create_code_from_elements(elements: dict[str, list[ast.AST]]) -> str:
 
 
 def generate_module_name(class_name: str) -> str:
-    return class_name.lower().capitalize()
+    return to_snake_case(class_name)
 
 
 def get_required_imports_for_class(
@@ -213,7 +139,7 @@ def remove_class_from_code_elements(
             print(f"Removed {removed_count} elements from {key}")
 
 
-def extract_code_elements(code: str) -> Dict[str, List[ast.stmt]]:
+def load_code_elements_from_code(code: str) -> Dict[str, List[ast.stmt]]:
     tree = ast.parse(code)
     elements: Dict[str, List[ast.stmt]] = {}
 
@@ -257,6 +183,13 @@ def extract_code_elements(code: str) -> Dict[str, List[ast.stmt]]:
                     return_list.remove(return_def)
 
     return elements
+
+
+def load_code_elements_from_file(file_path: str) -> Dict[str, List[ast.stmt]]:
+    with open(file_path) as file:
+        code = file.read()
+
+    return load_code_elements_from_code(code)
 
 
 def get_classes_list(elements: Dict[str, List[ast.stmt]]) -> List[ast.ClassDef]:
@@ -333,8 +266,8 @@ def get_name(node: ast.stmt) -> str:
 
 
 def compare_from_code(left_code: str, right_code: str) -> bool:
-    left_elements = extract_code_elements(left_code)
-    right_elements = extract_code_elements(right_code)
+    left_elements = load_code_elements_from_code(left_code)
+    right_elements = load_code_elements_from_code(right_code)
 
     if len(left_elements) != len(right_elements):
         return False
