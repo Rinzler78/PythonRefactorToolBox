@@ -55,7 +55,6 @@ class SourceDirectory:
         self.__source_files = source_files or None
 
     def refactor(self):
-        for file in self.source_files:
-            file.refactor()
-
+        for source_file in self.__source_files:
+            source_file.refactor()
         self.load()
