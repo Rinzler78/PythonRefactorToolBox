@@ -1,6 +1,6 @@
 import unittest
 
-from python_refactor_toolbox.snake_case import to_snake_case
+from python_refactor_tool_box.snake_case import to_snake_case
 
 
 class TestSnakeCase(unittest.TestCase):

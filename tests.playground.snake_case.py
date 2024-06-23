@@ -1,4 +1,4 @@
-from src.python_refactor_toolbox.snake_case import to_snake_case
+from src.python_refactor_tool_box.snake_case import to_snake_case
 
 test_cases = {
     "normal_case": (

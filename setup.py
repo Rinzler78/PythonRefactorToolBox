@@ -1,5 +1,5 @@
 """
-    Setup file for PythonRefactorToolBox.
+    Setup file for python_refactor_tool_box.
     Use setup.cfg to configure your project.
 
     This file was generated with PyScaffold 4.5.

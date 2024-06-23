@@ -1,8 +1,8 @@
 =====================
-PythonRefactorToolBox
+python_refactor_tool_box
 =====================
 
-This is the documentation of **PythonRefactorToolBox**.
+This is the documentation of **python_refactor_tool_box**.
 
 .. note::
 
