@@ -1,3 +1,5 @@
+import argparse
+import os
 import sys
 
 from .snake_case import to_snake_case  # noqa
@@ -18,3 +20,24 @@ except PackageNotFoundError:  # pragma: no cover
     __version__ = "unknown"
 finally:
     del version, PackageNotFoundError
+
+
+def init_module(path: str) -> None:
+    if os.path.isdir(path):
+        SourceDirectory(path).refactor()
+    elif os.path.isfile(path):
+        SourceFile(path).refactor()
+    else:
+        print(f"Error: {path} is neither a file nor a directory")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Initialize a Python module")
+    parser.add_argument("path", type=str, help="Path to a directory or a file")
+
+    args = parser.parse_args()
+    init_module(args.path)
+
+
+if __name__ == "__main__":
+    main()

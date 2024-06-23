@@ -5,19 +5,17 @@ from typing import Dict, List, Set
 import astor
 import autopep8
 
-# def refactor_from_directory(path: str):
-#     for root, _, files in os.walk(path):
-#         for file in files:
-#             if file.endswith(".py"):
-#                 refactor_from_file(os.path.join(root, file))
 
+def refactor_file(path: str) -> bool:
+    if not os.path.exists(path):
+        print(f"File not found : {path}")
+        return False
 
-def refactor_from_file(path: str):
     print(f"Refactoring code from file : {path}")
     with open(path) as file:
         code = file.read()
 
-    refactored_code = refactor_from_code(code, path)
+    refactored_code = refactor_code(code, path)
 
     if should_delete_file(refactored_code):
         os.remove(path)
@@ -25,8 +23,10 @@ def refactor_from_file(path: str):
         with open(path, "w") as file:
             file.write(refactored_code)
 
+    return True
 
-def refactor_from_code(code: str, current_file_path: str) -> str:
+
+def refactor_code(code: str, current_file_path: str) -> str:
     # Extract elements from code
     elements = extract_code_elements(code)
     classes = get_classes_list(elements)
@@ -111,17 +111,13 @@ def create_import(module_name: str, class_name: str) -> ast.ImportFrom:
 
 
 def create_code_from_elements(elements: dict[str, list[ast.AST]]) -> str:
-    # Créer une liste pour stocker tous les nœuds AST
     all_nodes = []
 
-    # Parcourir les éléments et ajouter les nœuds AST à la liste
     for key, ast_list in elements.items():
         all_nodes.extend(ast_list)
 
-    # Créer un module AST (racine d'un arbre syntaxique Python)
     module = ast.Module(body=all_nodes, type_ignores=[])
 
-    # Utiliser astor pour générer le code source à partir du module AST
     generated_code = astor.to_source(module)
 
     return format_code(generated_code)
@@ -262,18 +258,6 @@ def extract_code_elements(code: str) -> Dict[str, List[ast.stmt]]:
 
     return elements
 
-    # Remove un need ed Return nodes
-    function_def_list = get_function_def_list(elements)
-    return_list = get_return_list(elements)
-
-    if function_def_list and function_def_list:
-        for func_def in function_def_list:
-            for return_def in func_def.body:
-                if return_def in return_list:
-                    return_list.remove(return_def)
-
-    return elements
-
 
 def get_classes_list(elements: Dict[str, List[ast.stmt]]) -> List[ast.ClassDef]:
     try:
@@ -346,11 +330,6 @@ def get_name(node: ast.stmt) -> str:
         return node.target.id
     else:
         return ""
-
-
-def get_class_node_from_code(code: str, class_name: str) -> ast.ClassDef:
-    elements = extract_code_elements(code)
-    return next(node for node in elements["classes"] if node.name == class_name)
 
 
 def compare_from_code(left_code: str, right_code: str) -> bool:

@@ -1,4 +1,4 @@
-from .python_refactor_helper import compare_codes_from_files, refactor_from_file
+from .python_refactor_helper import compare_codes_from_files, refactor_file
 
 
 class SourceFile:
@@ -24,4 +24,4 @@ class SourceFile:
         return self.__path
 
     def refactor(self):
-        refactor_from_file(self.__path)
+        refactor_file(self.__path)
