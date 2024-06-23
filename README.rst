@@ -31,10 +31,9 @@
     :target: https://pyscaffold.org/
 
 |
-
-=====================
+========================
 python_refactor_tool_box
-=====================
+========================
 
 
     A set of tools helping to refactor python code
@@ -55,24 +54,11 @@ Quick start
 
 .. code-block:: python
 
-    from python_refactor_tool_box.SourceDirectory import SourceDirectory
-    from tests.helper import (
-        create_samples,
-        expected_samples_directory,
-        input_samples_directory,
-        samples_directory,
-    )
-
-    create_samples(samples_directory)
-
-    input_source_directory = SourceDirectory(input_samples_directory)
+    from python_refactor_tool_box import SourceDirectory
+    input_directory = "path/to/your/directory"
+    input_source_directory = SourceDirectory(input_directory)
 
     input_source_directory.refactor()
-
-Examples
-========
-
-Take a look at quick_start.py to see how to use the library.
 
 Note
 ====
@@ -83,7 +69,7 @@ information on PyScaffold see https://pyscaffold.org/.
 Licence
 =======
 
-ffbb_api_client is distributed under the Apache 2.0 license.
+python_refactor_tool_box is distributed under the Apache 2.0 license.
 
 Dev notes
 =========
@@ -92,4 +78,4 @@ Command used to create this project:
 
 .. code-block:: bash
 
-    putup FFBBApiClient_Python -p ffbb_api_client -l Apache-2.0 -d "Allow to interact with FFBB apis" -u "https://github.com/Rinzler78/FFBBApiClient_Python" -v --github-actions --venv .venv
+    putup PythonRefactorToolBox -p python_refactor_tool_box -l Apache-2.0 -d "Allow to interact with FFBB apis" -u "https://github.com/Rinzler78/PythonRefactorToolBox" -v --github-actions --venv .venv
