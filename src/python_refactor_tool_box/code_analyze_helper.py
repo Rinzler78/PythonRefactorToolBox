@@ -19,10 +19,11 @@ def should_delete_file(code: str) -> bool:
     if not code:
         return True
 
-    lines = [line for line in code.split("\n") if line.strip()]
+    lines = [line.strip() for line in code.split("\n")]
     return all(
         line.startswith("#") or line.startswith("import") or line.startswith("from")
         for line in lines
+        if line
     )
 
 
