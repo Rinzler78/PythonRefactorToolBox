@@ -1,103 +1,15 @@
 import ast
 import os
-from typing import Dict, List, Set
+from typing import Dict, List, Optional, Set
 
 import astor
 import autopep8
 
-# def refactor_from_directory(path: str):
-#     for root, _, files in os.walk(path):
-#         for file in files:
-#             if file.endswith(".py"):
-#                 refactor_from_file(os.path.join(root, file))
-
-
-def refactor_from_file(path: str):
-    print(f"Refactoring code from file : {path}")
-    with open(path) as file:
-        code = file.read()
-
-    refactored_code = refactor_from_code(code, path)
-
-    if should_delete_file(refactored_code):
-        os.remove(path)
-    else:
-        with open(path, "w") as file:
-            file.write(refactored_code)
-
-
-def refactor_from_code(code: str, current_file_path: str) -> str:
-    # Extract elements from code
-    elements = extract_code_elements(code)
-    classes = get_classes_list(elements)
-    imports_list = get_import_list(elements)
-    import_from_list = get_import_from_list(elements)
-    directory = os.path.dirname(current_file_path)
-
-    i = 0
-
-    while i < len(classes):
-        class_node = classes[i]
-
-        class_name = class_node.name
-        module_name = generate_module_name(class_name)
-        target_file_path = os.path.join(directory, f"{module_name}.py")
-
-        print(f"Found class {class_name} :")
-        print(f"- Target module {module_name}. Target file {target_file_path}")
-
-        if current_file_path != target_file_path:
-            # Create the class code
-            required_imports = get_required_imports_for_class(
-                class_node, imports_list + import_from_list
-            )
-            class_code = create_class_code(class_node, required_imports)
-
-            # Save the class in the target module
-            save_new_module(current_file_path, target_file_path, class_code)
-
-            # Create the import to the class in the new module
-            new_import = create_import(module_name, class_name)
-            imports_list.insert(0, new_import)
-
-            # Remove class form code elements
-            remove_class_from_code_elements(class_node, elements)
-        else:
-            i += 1
-
-    required_imports = get_required_imports_for_code_elements(
-        elements, imports_list + import_from_list
-    )
-    imports_list.clear()
-    import_from_list.clear()
-
-    for imp in required_imports:
-        if isinstance(imp, ast.Import):
-            imports_list.append(imp)
-        elif isinstance(imp, ast.ImportFrom):
-            import_from_list.append(imp)
-
-    new_code = create_code_from_elements(elements)
-
-    return new_code
+from .snake_case import to_snake_case
 
 
 def format_code(code: str) -> str:
     return autopep8.fix_code(code)
-
-
-def save_new_module(current_file_path: str, target_file_path: str, class_code: str):
-    if (
-        current_file_path.lower() == target_file_path.lower()
-        and current_file_path != target_file_path
-    ):
-        print(f"Remove {current_file_path}")
-        os.remove(current_file_path)
-
-    print(f"Create {target_file_path}")
-
-    with open(target_file_path, "w") as file:
-        file.write(class_code)
 
 
 def create_import(module_name: str, class_name: str) -> ast.ImportFrom:
@@ -111,24 +23,21 @@ def create_import(module_name: str, class_name: str) -> ast.ImportFrom:
 
 
 def create_code_from_elements(elements: dict[str, list[ast.AST]]) -> str:
-    # Créer une liste pour stocker tous les nœuds AST
     all_nodes = []
 
-    # Parcourir les éléments et ajouter les nœuds AST à la liste
     for key, ast_list in elements.items():
         all_nodes.extend(ast_list)
 
-    # Créer un module AST (racine d'un arbre syntaxique Python)
     module = ast.Module(body=all_nodes, type_ignores=[])
 
-    # Utiliser astor pour générer le code source à partir du module AST
     generated_code = astor.to_source(module)
 
     return format_code(generated_code)
 
 
 def generate_module_name(class_name: str) -> str:
-    return class_name.lower().capitalize()
+    return to_snake_case(class_name)
+    # return class_name.lower().capitalize()
 
 
 def get_required_imports_for_class(
@@ -194,12 +103,6 @@ def get_required_imports_for_code_elements(
     return required_imports
 
 
-def create_class_code(class_node, required_imports: List[ast.AST]) -> str:
-    import_code = "\n".join(ast.unparse(node).strip() for node in required_imports)
-    class_code = ast.unparse(class_node).strip()
-    return format_code(f"{import_code}\n\n{class_code}")
-
-
 def remove_class_from_code_elements(
     class_node: ast.ClassDef, elements: Dict[str, List[ast.stmt]]
 ) -> None:
@@ -217,7 +120,7 @@ def remove_class_from_code_elements(
             print(f"Removed {removed_count} elements from {key}")
 
 
-def extract_code_elements(code: str) -> Dict[str, List[ast.stmt]]:
+def load_code_elements_from_code(code: str) -> Dict[str, List[ast.stmt]]:
     tree = ast.parse(code)
     elements: Dict[str, List[ast.stmt]] = {}
 
@@ -232,8 +135,8 @@ def extract_code_elements(code: str) -> Dict[str, List[ast.stmt]]:
             elements[node_type] = [node]
 
     # Remove un need ed AnnAssign nodes
-    classes = get_classes_list(elements)
-    ann_assign_list = get_ann_assign_list(elements)
+    classes = get_classes(elements)
+    ann_assign_list = get_ann_assigns(elements)
 
     if classes and ann_assign_list:
         for cls in classes:
@@ -242,7 +145,7 @@ def extract_code_elements(code: str) -> Dict[str, List[ast.stmt]]:
                     ann_assign_list.remove(ann_assign)
 
     # Remove un need ed Assign nodes
-    assign_list = get_assign_list(elements)
+    assign_list = get_assigns(elements)
 
     if classes and assign_list:
         for cls in classes:
@@ -251,8 +154,8 @@ def extract_code_elements(code: str) -> Dict[str, List[ast.stmt]]:
                     assign_list.remove(assign)
 
     # Remove un need ed Return nodes
-    function_def_list = get_function_def_list(elements)
-    return_list = get_return_list(elements)
+    function_def_list = get_functions(elements)
+    return_list = get_returns(elements)
 
     if function_def_list and function_def_list:
         for func_def in function_def_list:
@@ -260,75 +163,222 @@ def extract_code_elements(code: str) -> Dict[str, List[ast.stmt]]:
                 if return_def in return_list:
                     return_list.remove(return_def)
 
-    return elements
-
-    # Remove un need ed Return nodes
-    function_def_list = get_function_def_list(elements)
-    return_list = get_return_list(elements)
-
-    if function_def_list and function_def_list:
-        for func_def in function_def_list:
-            for return_def in func_def.body:
-                if return_def in return_list:
-                    return_list.remove(return_def)
-
+    elements = {key: value for key, value in elements.items() if elements[key]}
     return elements
 
 
-def get_classes_list(elements: Dict[str, List[ast.stmt]]) -> List[ast.ClassDef]:
+def load_code_elements_from_file(file_path: str) -> Dict[str, List[ast.stmt]]:
+    with open(file_path) as file:
+        code = file.read()
+
+    return load_code_elements_from_code(code)
+
+
+# Class methods
+def get_classes(elements: Dict[str, List[ast.stmt]]) -> List[ast.ClassDef]:
     try:
         return elements["ClassDef"]
     except KeyError:
         elements["ClassDef"] = []
-        return get_classes_list(elements)
+        return get_classes(elements)
 
 
-def get_import_list(elements: Dict[str, List[ast.stmt]]) -> List[ast.AST]:
+def set_classes(
+    elements: Dict[str, List[ast.stmt]], new_classes: List[ast.ClassDef]
+) -> None:
+    classes = get_classes(elements)
+    classes.clear()
+
+    add_classes(classes, new_classes)
+
+
+def add_class(classes: List[ast.ClassDef], new_class: ast.ClassDef) -> None:
+    if new_class not in classes:
+        classes.append(new_class)
+
+
+def add_classes(classes: List[ast.ClassDef], new_classes: List[ast.ClassDef]) -> None:
+    for cls in new_classes:
+        add_class(classes, cls)
+
+
+# Imports methods
+def get_imports(elements: Dict[str, List[ast.stmt]]) -> List[ast.Import]:
     try:
         return elements["Import"]
     except KeyError:
         elements["Import"] = []
-        return get_import_list(elements)
+        return get_imports(elements)
 
 
-def get_import_from_list(elements: Dict[str, List[ast.stmt]]) -> List[ast.AST]:
+def set_imports(elements: Dict[str, List[ast.stmt]], imports: List[ast.Import]) -> None:
+    import_nodes = get_imports(elements)
+    import_nodes.clear()
+
+    add_imports(import_nodes, imports)
+
+
+def add_import(imports: List[ast.Import], new_import: ast.Import) -> None:
+    if new_import not in imports:
+        imports.append(new_import)
+
+
+def add_imports(imports: List[ast.Import], new_imports: List[ast.Import]) -> None:
+    for imp in new_imports:
+        add_import(imports, imp)
+
+
+# Imports from methods
+def get_from_imports(elements: Dict[str, List[ast.stmt]]) -> List[ast.ImportFrom]:
     try:
         return elements["ImportFrom"]
     except KeyError:
         elements["ImportFrom"] = []
-        return get_import_from_list(elements)
+        return get_from_imports(elements)
 
 
-def get_ann_assign_list(elements: Dict[str, List[ast.stmt]]) -> List[ast.AST]:
+def set_from_imports(
+    elements: Dict[str, List[ast.stmt]], new_imports: List[ast.ImportFrom]
+) -> None:
+    from_imports = get_from_imports(elements)
+    from_imports.clear()
+
+    add_from_imports(from_imports, new_imports)
+
+
+def add_from_import(
+    from_imports: List[ast.ImportFrom], new_from_import: ast.ImportFrom
+):
+    if new_from_import not in from_imports:
+        from_imports.append(new_from_import)
+
+
+def add_from_imports(
+    from_imports: List[ast.ImportFrom], new_from_import: List[ast.ImportFrom]
+) -> None:
+    for imp in new_from_import:
+        add_from_import(from_imports, imp)
+
+
+# Ann assign methods
+def get_ann_assigns(elements: Dict[str, List[ast.stmt]]) -> List[ast.AnnAssign]:
     try:
         return elements["AnnAssign"]
     except KeyError:
         elements["AnnAssign"] = []
-        return get_ann_assign_list(elements)
+        return get_ann_assigns(elements)
 
 
-def get_assign_list(elements: Dict[str, List[ast.stmt]]) -> List[ast.Assign]:
+def set_ann_assigns(
+    elements: Dict[str, List[ast.stmt]], new_ann_assigns: List[ast.AnnAssign]
+) -> None:
+    ann_assigns = get_ann_assigns(elements)
+    ann_assigns.clear()
+
+    add_ann_assigns(ann_assigns, new_ann_assigns)
+
+
+def add_ann_assign(
+    ann_assigns: List[ast.AnnAssign], new_ann_assign: ast.AnnAssign
+) -> None:
+    if new_ann_assign not in ann_assigns:
+        ann_assigns.append(new_ann_assign)
+
+
+def add_ann_assigns(
+    ann_assigns: List[ast.AnnAssign], new_ann_assigns: List[ast.AnnAssign]
+) -> None:
+    for ann_assign in new_ann_assigns:
+        add_ann_assign(ann_assigns, ann_assign)
+
+
+# Assign methods
+def get_assigns(elements: Dict[str, List[ast.stmt]]) -> List[ast.Assign]:
     try:
         return elements["Assign"]
     except KeyError:
         elements["Assign"] = []
-        return get_assign_list(elements)
+        return get_assigns(elements)
 
 
-def get_function_def_list(elements: Dict[str, List[ast.stmt]]) -> List[ast.FunctionDef]:
+def set_assigns(
+    elements: Dict[str, List[ast.stmt]], new_assigns: List[ast.Assign]
+) -> None:
+    assigns = get_assigns(elements)
+    assigns.clear()
+
+    add_assign(assigns, new_assigns)
+
+
+def add_assign(assigns: List[ast.Assign], new_assign: ast.Assign) -> None:
+    if new_assign not in assigns:
+        assigns.append(new_assign)
+
+
+def add_assigns(assigns: List[ast.Assign], new_assigns: List[ast.Assign]) -> None:
+    for assign in new_assigns:
+        add_assign(assigns, assign)
+
+
+# Functions Methods
+def get_functions(elements: Dict[str, List[ast.stmt]]) -> List[ast.FunctionDef]:
     try:
         return elements["FunctionDef"]
     except KeyError:
         elements["FunctionDef"] = []
-        return get_function_def_list(elements)
+        return get_functions(elements)
 
 
-def get_return_list(elements: Dict[str, List[ast.stmt]]) -> List[ast.Return]:
+def set_functions(
+    elements: Dict[str, List[ast.stmt]], new_function_defs: List[ast.FunctionDef]
+) -> None:
+    function_defs = get_functions(elements)
+    function_defs.clear()
+
+    add_functions(function_defs, new_function_defs)
+
+
+def add_function(
+    functions: List[ast.FunctionDef], new_function: ast.FunctionDef
+) -> None:
+    if new_function not in functions:
+        functions.append(new_function)
+
+
+def add_functions(
+    functions: List[ast.FunctionDef], new_functions: List[ast.FunctionDef]
+) -> None:
+    for function in new_functions:
+        add_function(functions, function)
+
+
+def get_returns(elements: Dict[str, List[ast.stmt]]) -> List[ast.Return]:
     try:
         return elements["Return"]
     except KeyError:
         elements["Return"] = []
-        return get_return_list(elements)
+        return get_returns(elements)
+
+
+def set_returns(
+    elements: Dict[str, List[ast.stmt]], new_returns: List[ast.Return]
+) -> None:
+    returns = get_returns(elements)
+    returns.clear()
+
+    add_returns(returns, new_returns)
+
+
+def add_return(returns: Dict[str, List[ast.stmt]], new_return: ast.Return) -> None:
+    if new_return not in returns:
+        returns.append(new_return)
+
+
+def add_returns(
+    returns: Dict[str, List[ast.stmt]], new_returns: List[ast.Return]
+) -> None:
+    for return_node in new_returns:
+        add_return(returns, return_node)
 
 
 def get_name(node: ast.stmt) -> str:
@@ -348,14 +398,9 @@ def get_name(node: ast.stmt) -> str:
         return ""
 
 
-def get_class_node_from_code(code: str, class_name: str) -> ast.ClassDef:
-    elements = extract_code_elements(code)
-    return next(node for node in elements["classes"] if node.name == class_name)
-
-
 def compare_from_code(left_code: str, right_code: str) -> bool:
-    left_elements = extract_code_elements(left_code)
-    right_elements = extract_code_elements(right_code)
+    left_elements = load_code_elements_from_code(left_code)
+    right_elements = load_code_elements_from_code(right_code)
 
     if len(left_elements) != len(right_elements):
         return False
@@ -402,3 +447,185 @@ def should_delete_file(code: str) -> bool:
         line.startswith("#") or line.startswith("import") or line.startswith("from")
         for line in lines
     )
+
+
+def should_delete_file_from_elements(elements: Dict[str, List[ast.stmt]]) -> bool:
+    if not elements:
+        return True
+
+    imports = get_imports(elements)
+    from_imports = get_from_imports(elements)
+
+    for key in elements:
+        if elements[key] != imports and elements[key] != from_imports:
+            return False
+    return True
+
+
+def find_class_dependent_files(
+    class_name: str, current_file_path: str, directory_path: Optional[str] = None
+) -> List[str]:
+    if directory_path is None:
+        directory_path = os.path.dirname(os.path.abspath(current_file_path))
+
+    dependent_files = []
+
+    for root, _, files in os.walk(directory_path):
+        for file in files:
+            if file.endswith(".py"):
+                file_path = os.path.join(root, file)
+
+                # Skip the current file
+                if os.path.abspath(file_path) == os.path.abspath(current_file_path):
+                    continue
+
+                # Parse the file
+                with open(file_path) as f:
+                    try:
+                        file_content = f.read()
+                        tree = ast.parse(file_content, filename=file_path)
+                    except Exception as e:
+                        print(f"Error parsing {file_path}: {e}")
+                        continue
+
+                # Check if the class is imported or used in this file
+                class_found = False
+
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.ImportFrom):
+                        for alias in node.names:
+                            if alias.name == class_name:
+                                dependent_files.append(file_path)
+                                class_found = True
+                                break
+                    elif isinstance(node, ast.Import):
+                        for alias in node.names:
+                            if alias.name.split(".")[0] == class_name:
+                                dependent_files.append(file_path)
+                                class_found = True
+                                break
+                    elif isinstance(node, ast.Name) and node.id == class_name:
+                        dependent_files.append(file_path)
+                        class_found = True
+                        break
+
+                if class_found:
+                    continue
+
+    return list(set(dependent_files))
+
+
+def find_module_dependent_files(
+    module_name: str, current_file_path: str, directory_path: Optional[str] = None
+) -> List[str]:
+
+    if directory_path is None:
+        directory_path = os.path.dirname(os.path.abspath(current_file_path))
+
+    dependent_files = []
+
+    for root, _, files in os.walk(directory_path):
+        for file in files:
+            if file.endswith(".py"):
+                file_path = os.path.join(root, file)
+
+                # Skip the current file
+                if os.path.abspath(file_path) == os.path.abspath(current_file_path):
+                    continue
+
+                # Parse the file
+                with open(file_path) as f:
+                    try:
+                        file_content = f.read()
+                        tree = ast.parse(file_content, filename=file_path)
+                    except Exception as e:
+                        print(f"Error parsing {file_path}: {e}")
+                        continue
+
+                # Check if the module is imported in this file
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.ImportFrom):
+                        if node.module == module_name:
+                            dependent_files.append(file_path)
+                            break
+                    elif isinstance(node, ast.Import):
+                        for alias in node.names:
+                            if alias.name == module_name or alias.name.startswith(
+                                module_name + "."
+                            ):
+                                dependent_files.append(file_path)
+                                break
+
+    return list(set(dependent_files))
+
+
+def update_class_imports_in_file(
+    target_file_path: str,
+    class_name: str,
+    previous_module_name: str,
+    new_module_name: str,
+) -> None:
+    # Analyser le fichier cible
+    with open(target_file_path) as file:
+        file_content = file.read()
+
+    tree = ast.parse(file_content, filename=target_file_path)
+
+    class ImportUpdater(ast.NodeTransformer):
+        def visit_Import(self, node: ast.Import) -> ast.AST:
+            for alias in node.names:
+                if alias.name == previous_module_name:
+                    alias.name = new_module_name
+            return node
+
+        def visit_ImportFrom(self, node: ast.ImportFrom) -> ast.AST:
+            if node.module == previous_module_name:
+                for alias in node.names:
+                    if alias.name == class_name:
+                        node.module = new_module_name
+            return node
+
+    updater = ImportUpdater()
+    new_tree = updater.visit(tree)
+
+    new_code = ast.unparse(new_tree)
+
+    with open(target_file_path, "w") as file:
+        file.write(new_code)
+
+
+def update_module_imports_in_file(
+    target_file_path: str, previous_module_name: str, new_module_name: str
+) -> None:
+    with open(target_file_path) as file:
+        file_content = file.read()
+
+    tree = ast.parse(file_content, filename=target_file_path)
+
+    class ImportUpdater(ast.NodeTransformer):
+        def visit_Import(self, node: ast.Import) -> ast.AST:
+            for alias in node.names:
+                if alias.name == previous_module_name or alias.name.startswith(
+                    previous_module_name + "."
+                ):
+                    alias.name = alias.name.replace(
+                        previous_module_name, new_module_name, 1
+                    )
+            return node
+
+        def visit_ImportFrom(self, node: ast.ImportFrom) -> ast.AST:
+            if node.module == previous_module_name or node.module.startswith(
+                previous_module_name + "."
+            ):
+                node.module = node.module.replace(
+                    previous_module_name, new_module_name, 1
+                )
+            return node
+
+    updater = ImportUpdater()
+    new_tree = updater.visit(tree)
+
+    new_code = ast.unparse(new_tree)
+
+    with open(target_file_path, "w") as file:
+        file.write(new_code)
