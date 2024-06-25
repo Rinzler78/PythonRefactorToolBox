@@ -2,42 +2,41 @@ import ast
 import os
 from typing import Dict, List
 
-from .python_refactor_helper import (
+from .ast_helper import (
     add_class,
     add_classes,
     add_from_import,
     add_from_imports,
     add_import,
     add_imports,
-    compare_codes_from_files,
-    create_code_from_elements,
-    create_import,
-    find_class_dependent_files,
-    find_module_dependent_files,
-    generate_module_name,
+    create_code,
+    create_from_import,
+    get_class_required_imports,
     get_classes,
+    get_code_tree_required_imports,
     get_from_imports,
     get_imports,
-    get_required_imports_for_class,
-    get_required_imports_for_code_elements,
-    load_code_elements_from_file,
-    remove_class_from_code_elements,
+    load_code_code_tree_from_file,
+    remove_class_from_code_code_tree,
     set_classes,
     set_from_imports,
     set_imports,
-    should_delete_file_from_elements,
     update_class_imports_in_file,
     update_module_imports_in_file,
 )
+from .code_analyze_helper import should_delete_file_from_code_tree
+from .code_compare_helper import compare_codes_from_files
+from .code_format_helper import generate_module_name
+from .code_search_helper import find_class_dependent_files, find_module_dependent_files
 
 
 class SourceFile:
     __path: str = None
-    __elements: Dict[str, List[ast.stmt]] = None
+    __code_tree: Dict[str, List[ast.stmt]] = None
 
     def __init__(self, path):
         self.__path = path
-        self.__elements = None
+        self.__code_tree = None
 
     def __eq__(self, other):
         if not (other and isinstance(other, SourceFile)):
@@ -62,49 +61,49 @@ class SourceFile:
         return self.__path
 
     @property
-    def module(self) -> str:
-        return os.path.basename(self.path).split(".")[0]
-
-    @property
     def file_name(self) -> str:
         return os.path.basename(self.__path)
+
+    @property
+    def module(self) -> str:
+        return self.file_name.split(".")[0]
 
     @property
     def is_exists(self) -> bool:
         return os.path.exists(self.__path)
 
-    def __load_code_elements(self):
-        self.__elements = (
-            load_code_elements_from_file(self.path)
+    def __load_code_code_tree(self):
+        self.__code_tree = (
+            load_code_code_tree_from_file(self.path)
             if os.path.exists(self.__path)
             else {}
         )
 
     @property
     def should_be_deleted(self) -> bool:
-        return should_delete_file_from_elements(self.elements)
+        return should_delete_file_from_code_tree(self.code_tree)
 
     def save(self) -> bool:
         print(f"Saving file {self.path}")
-        code = create_code_from_elements(self.elements)
+        code = create_code(self.code_tree)
 
         with open(self.path, "w") as file:
             file.write(code)
         return True
 
     @property
-    def elements(self) -> Dict[str, List[ast.stmt]]:
-        if not self.__elements:
-            self.__load_code_elements()
-        return self.__elements
+    def code_tree(self) -> Dict[str, List[ast.stmt]]:
+        if not self.__code_tree:
+            self.__load_code_code_tree()
+        return self.__code_tree
 
     @property
     def classes(self) -> List[ast.ClassDef]:
-        return get_classes(self.elements)
+        return get_classes(self.code_tree)
 
     @classes.setter
     def classes(self, new_classes: List[ast.ClassDef]):
-        set_classes(self.elements, new_classes)
+        set_classes(self.code_tree, new_classes)
 
     def add_class(self, class_node: ast.ClassDef) -> None:
         add_class(self.classes, class_node)
@@ -113,7 +112,7 @@ class SourceFile:
         add_classes(self.classes, classes)
 
     def remove_class(self, class_node: ast.ClassDef) -> None:
-        remove_class_from_code_elements(class_node, self.elements)
+        remove_class_from_code_code_tree(class_node, self.code_tree)
 
     def remove_classes(self, classes: List[ast.ClassDef]) -> None:
         for class_node in classes:
@@ -121,11 +120,11 @@ class SourceFile:
 
     @property
     def imports(self) -> List[ast.AST]:
-        return get_imports(self.elements)
+        return get_imports(self.code_tree)
 
     @imports.setter
     def imports(self, new_imports: List[ast.AST]):
-        set_imports(self.elements, new_imports)
+        set_imports(self.code_tree, new_imports)
 
     def add_import(self, import_node: ast.Import) -> None:
         add_import(self.imports, import_node)
@@ -135,11 +134,11 @@ class SourceFile:
 
     @property
     def from_imports(self) -> List[ast.AST]:
-        return get_from_imports(self.elements)
+        return get_from_imports(self.code_tree)
 
     @from_imports.setter
     def from_imports(self, new_from_import: List[ast.AST]):
-        set_from_imports(self.elements, new_from_import)
+        set_from_imports(self.code_tree, new_from_import)
 
     def add_from_import(self, from_import_node: ast.ImportFrom) -> None:
         add_from_import(self.from_imports, from_import_node)
@@ -170,7 +169,7 @@ class SourceFile:
             return False
 
         # Load existing code
-        self.__load_code_elements()
+        self.__load_code_code_tree()
 
         # Remove existing file
         os.remove(self.path)
@@ -227,17 +226,17 @@ class SourceFile:
                 continue
 
             # Create the class code
-            source_file.all_imports = get_required_imports_for_class(
+            source_file.all_imports = get_class_required_imports(
                 class_node, self.imports + self.from_imports
             )
             source_file.classes = [class_node]
             source_file.save()
 
             # Create the import to the class in the new module
-            new_import = create_import(module_name, class_name)
+            new_import = create_from_import(module_name, class_name)
             self.imports.insert(0, new_import)
 
-            # Remove class form code elements
+            # Remove class form code code_tree
             self.remove_class(class_node)
 
             dependant_files_paths = find_class_dependent_files(module_name, self.path)
@@ -247,8 +246,8 @@ class SourceFile:
                     path, class_node.name, self.module, source_file.module
                 )
 
-        self.all_imports = get_required_imports_for_code_elements(
-            self.elements, self.imports + self.from_imports
+        self.all_imports = get_code_tree_required_imports(
+            self.code_tree, self.imports + self.from_imports
         )
 
         self.save()

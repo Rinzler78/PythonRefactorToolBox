@@ -1,27 +1,14 @@
 import ast
-import os
 from typing import Dict, List, Set
 
 import astor
-import autopep8
 
-from .snake_case import to_snake_case
-
-
-def format_code(code: str) -> str:
-    """
-    Format the given code string using autopep8.
-
-    Args:
-        code (str): The code to format.
-
-    Returns:
-        str: The formatted code.
-    """
-    return autopep8.fix_code(code)
+from .code_format_helper import format_code
 
 
-def create_import(module_name: str, class_name: str) -> ast.ImportFrom:
+def create_from_import(
+    module_name: str, class_name: str, level: int = 1
+) -> ast.ImportFrom:
     """
     Create an ImportFrom AST node.
 
@@ -33,40 +20,27 @@ def create_import(module_name: str, class_name: str) -> ast.ImportFrom:
         ast.ImportFrom: The ImportFrom node.
     """
     return ast.ImportFrom(
-        module=module_name, names=[ast.alias(name=class_name, asname=None)], level=1
+        module=module_name, names=[ast.alias(name=class_name, asname=None)], level=level
     )
 
 
-def create_code_from_elements(elements: Dict[str, List[ast.AST]]) -> str:
+def create_code(code_tree: Dict[str, List[ast.AST]]) -> str:
     """
-    Generate code from AST elements.
+    Generate code from AST code_tree.
 
     Args:
-        elements (Dict[str, List[ast.AST]]): A dictionary of AST elements.
+        code_tree (Dict[str, List[ast.AST]]): A dictionary of AST code_tree.
 
     Returns:
         str: The generated code.
     """
-    all_nodes = [node for ast_list in elements.values() for node in ast_list]
+    all_nodes = [node for ast_list in code_tree.values() for node in ast_list]
     module = ast.Module(body=all_nodes, type_ignores=[])
     generated_code = astor.to_source(module)
     return format_code(generated_code)
 
 
-def generate_module_name(class_name: str) -> str:
-    """
-    Generate a module name from a class name using snake case.
-
-    Args:
-        class_name (str): The class name.
-
-    Returns:
-        str: The module name in snake case.
-    """
-    return to_snake_case(class_name)
-
-
-def get_required_imports_for_class(
+def get_class_required_imports(
     class_node: ast.ClassDef, imports: List[ast.AST]
 ) -> List[ast.AST]:
     """
@@ -103,14 +77,14 @@ def get_required_imports_for_class(
     return required_imports
 
 
-def get_required_imports_for_code_elements(
-    elements: Dict[str, List[ast.AST]], imports: List[ast.AST]
+def get_code_tree_required_imports(
+    code_tree: Dict[str, List[ast.AST]], imports: List[ast.AST]
 ) -> List[ast.AST]:
     """
-    Determine the required imports for given code elements.
+    Determine the required imports for given code code_tree.
 
     Args:
-        elements (Dict[str, List[ast.AST]]): A dictionary of code elements.
+        code_tree (Dict[str, List[ast.AST]]): A dictionary of code code_tree.
         imports (List[ast.AST]): A list of import nodes.
 
     Returns:
@@ -122,7 +96,7 @@ def get_required_imports_for_code_elements(
 
     all_names = {
         name
-        for nodes in elements.values()
+        for nodes in code_tree.values()
         for node in nodes
         for name in extract_names(node)
     }
@@ -149,51 +123,51 @@ def get_required_imports_for_code_elements(
     return required_imports
 
 
-def remove_class_from_code_elements(
-    class_node: ast.ClassDef, elements: Dict[str, List[ast.stmt]]
+def remove_class_from_code_code_tree(
+    class_node: ast.ClassDef, code_tree: Dict[str, List[ast.stmt]]
 ) -> None:
     """
-    Remove elements related to a specific class from code elements.
+    Remove code_tree related to a specific class from code code_tree.
 
     Args:
         class_node (ast.ClassDef): The class node.
-        elements (Dict[str, List[ast.stmt]]): A dictionary of code elements.
+        code_tree (Dict[str, List[ast.stmt]]): A dictionary of code code_tree.
     """
     class_body_nodes = set(ast.walk(class_node))
 
-    for key in elements:
-        initial_length = len(elements[key])
-        elements[key][:] = [
-            node for node in elements[key] if node not in class_body_nodes
+    for key in code_tree:
+        initial_length = len(code_tree[key])
+        code_tree[key][:] = [
+            node for node in code_tree[key] if node not in class_body_nodes
         ]
-        removed_count = initial_length - len(elements[key])
+        removed_count = initial_length - len(code_tree[key])
         if removed_count > 0:
-            print(f"Removed {removed_count} elements from {key}")
+            print(f"Removed {removed_count} code_tree from {key}")
 
 
-def load_code_elements_from_code(code: str) -> Dict[str, List[ast.stmt]]:
+def load_code_code_tree_from_code(code: str) -> Dict[str, List[ast.stmt]]:
     """
-    Load code elements from a given code string.
+    Load code code_tree from a given code string.
 
     Args:
         code (str): The code to parse.
 
     Returns:
-        Dict[str, List[ast.stmt]]: A dictionary of code elements.
+        Dict[str, List[ast.stmt]]: A dictionary of code code_tree.
     """
     tree = ast.parse(code)
-    elements: Dict[str, List[ast.stmt]] = {}
+    code_tree: Dict[str, List[ast.stmt]] = {}
 
     for node in ast.walk(tree):
         if not isinstance(node, ast.stmt):
             continue
 
         node_type = type(node).__name__
-        elements.setdefault(node_type, []).append(node)
+        code_tree.setdefault(node_type, []).append(node)
 
     # Remove unnecessary AnnAssign nodes
-    classes = get_classes(elements)
-    ann_assign_list = get_ann_assigns(elements)
+    classes = get_classes(code_tree)
+    ann_assign_list = get_ann_assigns(code_tree)
 
     if classes and ann_assign_list:
         for cls in classes:
@@ -202,7 +176,7 @@ def load_code_elements_from_code(code: str) -> Dict[str, List[ast.stmt]]:
                     ann_assign_list.remove(ann_assign)
 
     # Remove unnecessary Assign nodes
-    assign_list = get_assigns(elements)
+    assign_list = get_assigns(code_tree)
 
     if classes and assign_list:
         for cls in classes:
@@ -211,8 +185,8 @@ def load_code_elements_from_code(code: str) -> Dict[str, List[ast.stmt]]:
                     assign_list.remove(assign)
 
     # Remove unnecessary Return nodes
-    function_def_list = get_functions(elements)
-    return_list = get_returns(elements)
+    function_def_list = get_functions(code_tree)
+    return_list = get_returns(code_tree)
 
     if function_def_list and return_list:
         for func_def in function_def_list:
@@ -220,50 +194,50 @@ def load_code_elements_from_code(code: str) -> Dict[str, List[ast.stmt]]:
                 if return_def in return_list:
                     return_list.remove(return_def)
 
-    elements = {key: value for key, value in elements.items() if elements[key]}
-    return elements
+    code_tree = {key: value for key, value in code_tree.items() if code_tree[key]}
+    return code_tree
 
 
-def load_code_elements_from_file(file_path: str) -> Dict[str, List[ast.stmt]]:
+def load_code_code_tree_from_file(file_path: str) -> Dict[str, List[ast.stmt]]:
     """
-    Load code elements from a file.
+    Load code code_tree from a file.
 
     Args:
         file_path (str): The path to the file.
 
     Returns:
-        Dict[str, List[ast.stmt]]: A dictionary of code elements.
+        Dict[str, List[ast.stmt]]: A dictionary of code code_tree.
     """
     with open(file_path) as file:
         code = file.read()
-    return load_code_elements_from_code(code)
+    return load_code_code_tree_from_code(code)
 
 
 # Class methods
-def get_classes(elements: Dict[str, List[ast.stmt]]) -> List[ast.ClassDef]:
+def get_classes(code_tree: Dict[str, List[ast.stmt]]) -> List[ast.ClassDef]:
     """
-    Retrieve class definitions from elements.
+    Retrieve class definitions from code_tree.
 
     Args:
-        elements (Dict[str, List[ast.stmt]]): A dictionary of code elements.
+        code_tree (Dict[str, List[ast.stmt]]): A dictionary of code code_tree.
 
     Returns:
         List[ast.ClassDef]: A list of class definitions.
     """
-    return elements.get("ClassDef", [])
+    return code_tree.get("ClassDef", [])
 
 
 def set_classes(
-    elements: Dict[str, List[ast.stmt]], new_classes: List[ast.ClassDef]
+    code_tree: Dict[str, List[ast.stmt]], new_classes: List[ast.ClassDef]
 ) -> None:
     """
-    Set new class definitions in the elements.
+    Set new class definitions in the code_tree.
 
     Args:
-        elements (Dict[str, List[ast.stmt]]): A dictionary of code elements.
+        code_tree (Dict[str, List[ast.stmt]]): A dictionary of code code_tree.
         new_classes (List[ast.ClassDef]): The new class definitions.
     """
-    classes = get_classes(elements)
+    classes = get_classes(code_tree)
     classes.clear()
     add_classes(classes, new_classes)
 
@@ -293,28 +267,30 @@ def add_classes(classes: List[ast.ClassDef], new_classes: List[ast.ClassDef]) ->
 
 
 # Imports methods
-def get_imports(elements: Dict[str, List[ast.stmt]]) -> List[ast.Import]:
+def get_imports(code_tree: Dict[str, List[ast.stmt]]) -> List[ast.Import]:
     """
-    Retrieve import statements from elements.
+    Retrieve import statements from code_tree.
 
     Args:
-        elements (Dict[str, List[ast.stmt]]): A dictionary of code elements.
+        code_tree (Dict[str, List[ast.stmt]]): A dictionary of code code_tree.
 
     Returns:
         List[ast.Import]: A list of import statements.
     """
-    return elements.get("Import", [])
+    return code_tree.get("Import", [])
 
 
-def set_imports(elements: Dict[str, List[ast.stmt]], imports: List[ast.Import]) -> None:
+def set_imports(
+    code_tree: Dict[str, List[ast.stmt]], imports: List[ast.Import]
+) -> None:
     """
-    Set new import statements in the elements.
+    Set new import statements in the code_tree.
 
     Args:
-        elements (Dict[str, List[ast.stmt]]): A dictionary of code elements.
+        code_tree (Dict[str, List[ast.stmt]]): A dictionary of code code_tree.
         imports (List[ast.Import]): The new import statements.
     """
-    import_nodes = get_imports(elements)
+    import_nodes = get_imports(code_tree)
     import_nodes.clear()
     add_imports(import_nodes, imports)
 
@@ -344,30 +320,30 @@ def add_imports(imports: List[ast.Import], new_imports: List[ast.Import]) -> Non
 
 
 # Imports from methods
-def get_from_imports(elements: Dict[str, List[ast.stmt]]) -> List[ast.ImportFrom]:
+def get_from_imports(code_tree: Dict[str, List[ast.stmt]]) -> List[ast.ImportFrom]:
     """
-    Retrieve import-from statements from elements.
+    Retrieve import-from statements from code_tree.
 
     Args:
-        elements (Dict[str, List[ast.stmt]]): A dictionary of code elements.
+        code_tree (Dict[str, List[ast.stmt]]): A dictionary of code code_tree.
 
     Returns:
         List[ast.ImportFrom]: A list of import-from statements.
     """
-    return elements.get("ImportFrom", [])
+    return code_tree.get("ImportFrom", [])
 
 
 def set_from_imports(
-    elements: Dict[str, List[ast.stmt]], new_imports: List[ast.ImportFrom]
+    code_tree: Dict[str, List[ast.stmt]], new_imports: List[ast.ImportFrom]
 ) -> None:
     """
-    Set new import-from statements in the elements.
+    Set new import-from statements in the code_tree.
 
     Args:
-        elements (Dict[str, List[ast.stmt]]): A dictionary of code elements.
+        code_tree (Dict[str, List[ast.stmt]]): A dictionary of code code_tree.
         new_imports (List[ast.ImportFrom]): The new import-from statements.
     """
-    from_imports = get_from_imports(elements)
+    from_imports = get_from_imports(code_tree)
     from_imports.clear()
     add_from_imports(from_imports, new_imports)
 
@@ -401,30 +377,30 @@ def add_from_imports(
 
 
 # Ann assign methods
-def get_ann_assigns(elements: Dict[str, List[ast.stmt]]) -> List[ast.AnnAssign]:
+def get_ann_assigns(code_tree: Dict[str, List[ast.stmt]]) -> List[ast.AnnAssign]:
     """
-    Retrieve annotated assignment statements from elements.
+    Retrieve annotated assignment statements from code_tree.
 
     Args:
-        elements (Dict[str, List[ast.stmt]]): A dictionary of code elements.
+        code_tree (Dict[str, List[ast.stmt]]): A dictionary of code code_tree.
 
     Returns:
         List[ast.AnnAssign]: A list of annotated assignment statements.
     """
-    return elements.get("AnnAssign", [])
+    return code_tree.get("AnnAssign", [])
 
 
 def set_ann_assigns(
-    elements: Dict[str, List[ast.stmt]], new_ann_assigns: List[ast.AnnAssign]
+    code_tree: Dict[str, List[ast.stmt]], new_ann_assigns: List[ast.AnnAssign]
 ) -> None:
     """
-    Set new annotated assignment statements in the elements.
+    Set new annotated assignment statements in the code_tree.
 
     Args:
-        elements (Dict[str, List[ast.stmt]]): A dictionary of code elements.
+        code_tree (Dict[str, List[ast.stmt]]): A dictionary of code code_tree.
         new_ann_assigns (List[ast.AnnAssign]): The new annotated assignment statements.
     """
-    ann_assigns = get_ann_assigns(elements)
+    ann_assigns = get_ann_assigns(code_tree)
     ann_assigns.clear()
     add_ann_assigns(ann_assigns, new_ann_assigns)
 
@@ -458,30 +434,30 @@ def add_ann_assigns(
 
 
 # Assign methods
-def get_assigns(elements: Dict[str, List[ast.stmt]]) -> List[ast.Assign]:
+def get_assigns(code_tree: Dict[str, List[ast.stmt]]) -> List[ast.Assign]:
     """
-    Retrieve assignment statements from elements.
+    Retrieve assignment statements from code_tree.
 
     Args:
-        elements (Dict[str, List[ast.stmt]]): A dictionary of code elements.
+        code_tree (Dict[str, List[ast.stmt]]): A dictionary of code code_tree.
 
     Returns:
         List[ast.Assign]: A list of assignment statements.
     """
-    return elements.get("Assign", [])
+    return code_tree.get("Assign", [])
 
 
 def set_assigns(
-    elements: Dict[str, List[ast.stmt]], new_assigns: List[ast.Assign]
+    code_tree: Dict[str, List[ast.stmt]], new_assigns: List[ast.Assign]
 ) -> None:
     """
-    Set new assignment statements in the elements.
+    Set new assignment statements in the code_tree.
 
     Args:
-        elements (Dict[str, List[ast.stmt]]): A dictionary of code elements.
+        code_tree (Dict[str, List[ast.stmt]]): A dictionary of code code_tree.
         new_assigns (List[ast.Assign]): The new assignment statements.
     """
-    assigns = get_assigns(elements)
+    assigns = get_assigns(code_tree)
     assigns.clear()
     add_assigns(assigns, new_assigns)
 
@@ -511,30 +487,30 @@ def add_assigns(assigns: List[ast.Assign], new_assigns: List[ast.Assign]) -> Non
 
 
 # Functions Methods
-def get_functions(elements: Dict[str, List[ast.stmt]]) -> List[ast.FunctionDef]:
+def get_functions(code_tree: Dict[str, List[ast.stmt]]) -> List[ast.FunctionDef]:
     """
-    Retrieve function definitions from elements.
+    Retrieve function definitions from code_tree.
 
     Args:
-        elements (Dict[str, List[ast.stmt]]): A dictionary of code elements.
+        code_tree (Dict[str, List[ast.stmt]]): A dictionary of code code_tree.
 
     Returns:
         List[ast.FunctionDef]: A list of function definitions.
     """
-    return elements.get("FunctionDef", [])
+    return code_tree.get("FunctionDef", [])
 
 
 def set_functions(
-    elements: Dict[str, List[ast.stmt]], new_function_defs: List[ast.FunctionDef]
+    code_tree: Dict[str, List[ast.stmt]], new_function_defs: List[ast.FunctionDef]
 ) -> None:
     """
-    Set new function definitions in the elements.
+    Set new function definitions in the code_tree.
 
     Args:
-        elements (Dict[str, List[ast.stmt]]): A dictionary of code elements.
+        code_tree (Dict[str, List[ast.stmt]]): A dictionary of code code_tree.
         new_function_defs (List[ast.FunctionDef]): The new function definitions.
     """
-    function_defs = get_functions(elements)
+    function_defs = get_functions(code_tree)
     function_defs.clear()
     add_functions(function_defs, new_function_defs)
 
@@ -567,30 +543,30 @@ def add_functions(
         add_function(functions, function)
 
 
-def get_returns(elements: Dict[str, List[ast.stmt]]) -> List[ast.Return]:
+def get_returns(code_tree: Dict[str, List[ast.stmt]]) -> List[ast.Return]:
     """
-    Retrieve return statements from elements.
+    Retrieve return statements from code_tree.
 
     Args:
-        elements (Dict[str, List[ast.stmt]]): A dictionary of code elements.
+        code_tree (Dict[str, List[ast.stmt]]): A dictionary of code code_tree.
 
     Returns:
         List[ast.Return]: A list of return statements.
     """
-    return elements.get("Return", [])
+    return code_tree.get("Return", [])
 
 
 def set_returns(
-    elements: Dict[str, List[ast.stmt]], new_returns: List[ast.Return]
+    code_tree: Dict[str, List[ast.stmt]], new_returns: List[ast.Return]
 ) -> None:
     """
-    Set new return statements in the elements.
+    Set new return statements in the code_tree.
 
     Args:
-        elements (Dict[str, List[ast.stmt]]): A dictionary of code elements.
+        code_tree (Dict[str, List[ast.stmt]]): A dictionary of code code_tree.
         new_returns (List[ast.Return]): The new return statements.
     """
-    returns = get_returns(elements)
+    returns = get_returns(code_tree)
     returns.clear()
     add_returns(returns, new_returns)
 
@@ -640,186 +616,6 @@ def get_name(node: ast.stmt) -> str:
     elif isinstance(node, ast.AnnAssign):
         return node.target.id
     return ""
-
-
-def compare_from_code(left_code: str, right_code: str) -> bool:
-    """
-    Compare two pieces of code to determine if they are equivalent.
-
-    Args:
-        left_code (str): The first piece of code.
-        right_code (str): The second piece of code.
-
-    Returns:
-        bool: True if the codes are equivalent, False otherwise.
-    """
-    left_elements = load_code_elements_from_code(left_code)
-    right_elements = load_code_elements_from_code(right_code)
-
-    if len(left_elements) != len(right_elements):
-        return False
-
-    for type_name in left_elements:
-        if type_name not in right_elements:
-            return False
-        if len(left_elements[type_name]) != len(right_elements[type_name]):
-            return False
-        if sorted(ast.dump(node) for node in left_elements[type_name]) != sorted(
-            ast.dump(node) for node in right_elements[type_name]
-        ):
-            return False
-
-    return True
-
-
-def compare_codes_from_files(left_file_path: str, right_file_path: str) -> bool:
-    """
-    Compare two files to determine if they are equivalent.
-
-    Args:
-        left_file_path (str): The path to the first file.
-        right_file_path (str): The path to the second file.
-
-    Returns:
-        bool: True if the files are equivalent, False otherwise.
-    """
-    with open(left_file_path) as left_file, open(right_file_path) as right_file:
-        left_code = left_file.read()
-        right_code = right_file.read()
-
-    return left_code == right_code or compare_from_code(left_code, right_code)
-
-
-def should_delete_file(code: str) -> bool:
-    """
-    Determine if a file should be deleted based on its content.
-
-    Args:
-        code (str): The code to check.
-
-    Returns:
-        bool: True if the file should be deleted, False otherwise.
-    """
-    code = code.strip()
-
-    if not code:
-        return True
-
-    lines = [line for line in code.split("\n") if line.strip()]
-    return all(
-        line.startswith("#") or line.startswith("import") or line.startswith("from")
-        for line in lines
-    )
-
-
-def should_delete_file_from_elements(elements: Dict[str, List[ast.stmt]]) -> bool:
-    """
-    Determine if a file should be deleted based on its elements.
-
-    Args:
-        elements (Dict[str, List[ast.stmt]]): A dictionary of code elements.
-
-    Returns:
-        bool: True if the file should be deleted, False otherwise.
-    """
-    if not elements:
-        return True
-
-    imports = get_imports(elements)
-    from_imports = get_from_imports(elements)
-
-    for key in elements:
-        if elements[key] != imports and elements[key] != from_imports:
-            return False
-
-    return True
-
-
-def find_class_dependent_files(class_name: str, current_file_path: str) -> List[str]:
-    """
-    Find files that depend on a specific class.
-
-    Args:
-        class_name (str): The name of the class.
-        current_file_path (str): The path to the current file.
-
-    Returns:
-        List[str]: A list of file paths that depend on the class.
-    """
-    directory_path = os.path.dirname(os.path.abspath(current_file_path))
-
-    dependent_files = []
-
-    for root, _, files in os.walk(directory_path):
-        for file in files:
-            if file.endswith(".py"):
-                file_path = os.path.join(root, file)
-                if os.path.abspath(file_path) == os.path.abspath(current_file_path):
-                    continue
-
-                with open(file_path) as f:
-                    try:
-                        file_content = f.read()
-                        tree = ast.parse(file_content, filename=file_path)
-                    except Exception as e:
-                        print(f"Error parsing {file_path}: {e}")
-                        continue
-
-                if any(
-                    isinstance(node, (ast.ImportFrom, ast.Import))
-                    and any(
-                        alias.name == class_name
-                        or alias.name.split(".")[0] == class_name
-                        for alias in node.names
-                    )
-                    for node in ast.walk(tree)
-                ):
-                    dependent_files.append(file_path)
-
-    return list(set(dependent_files))
-
-
-def find_module_dependent_files(module_name: str, current_file_path: str) -> List[str]:
-    """
-    Find files that depend on a specific module.
-
-    Args:
-        module_name (str): The name of the module.
-        current_file_path (str): The path to the current file.
-
-    Returns:
-        List[str]: A list of file paths that depend on the module.
-    """
-    directory_path = os.path.dirname(os.path.abspath(current_file_path))
-
-    dependent_files = []
-
-    for root, _, files in os.walk(directory_path):
-        for file in files:
-            if file.endswith(".py"):
-                file_path = os.path.join(root, file)
-                if os.path.abspath(file_path) == os.path.abspath(current_file_path):
-                    continue
-
-                with open(file_path) as f:
-                    try:
-                        file_content = f.read()
-                        tree = ast.parse(file_content, filename=file_path)
-                    except Exception as e:
-                        print(f"Error parsing {file_path}: {e}")
-                        continue
-
-                if any(
-                    isinstance(node, ast.ImportFrom)
-                    and node.module == module_name
-                    or any(
-                        alias.name.startswith(module_name + ".") for alias in node.names
-                    )
-                    for node in ast.walk(tree)
-                ):
-                    dependent_files.append(file_path)
-
-    return list(set(dependent_files))
 
 
 def update_class_imports_in_file(
