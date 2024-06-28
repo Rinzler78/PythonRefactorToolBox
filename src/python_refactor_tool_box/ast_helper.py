@@ -1,12 +1,12 @@
 import ast
-from typing import Dict, List, Set
+from typing import Dict, List, Set, Type, TypeVar
 
 import astor
 
 from .code_format_helper import format_code
 
 
-def create_from_import(
+def create_import_from(
     module_name: str, class_name: str, level: int = 1
 ) -> ast.ImportFrom:
     """
@@ -24,17 +24,40 @@ def create_from_import(
     )
 
 
-def create_code(code_tree: Dict[str, List[ast.AST]]) -> str:
+def create_code(code_tree: Dict[Type[ast.AST], List[ast.AST]]) -> str:
     """
     Generate code from AST code_tree.
 
     Args:
-        code_tree (Dict[str, List[ast.AST]]): A dictionary of AST code_tree.
+        code_tree (Dict[Type[ast.AST], List[ast.AST]]): A dictionary of AST code_tree.
 
     Returns:
         str: The generated code.
     """
-    all_nodes = [node for ast_list in code_tree.values() for node in ast_list]
+    all_nodes = []
+    seen_nodes = set()
+
+    def add_to_seen_recursively(node):
+        """
+        Add the node and its body elements to seen_nodes recursively.
+        """
+        node_dump = ast.dump(node)
+        if node_dump not in seen_nodes:
+            seen_nodes.add(node_dump)
+            if hasattr(node, "body") and isinstance(node.body, list):
+                for n in node.body:
+                    add_to_seen_recursively(n)
+
+    for ast_list in code_tree.values():
+        for node in ast_list:
+            node_dump = ast.dump(node)
+            if node_dump not in seen_nodes:
+                seen_nodes.add(node_dump)
+                all_nodes.append(node)
+                if hasattr(node, "body") and isinstance(node.body, list):
+                    for n in node.body:
+                        add_to_seen_recursively(n)
+
     module = ast.Module(body=all_nodes, type_ignores=[])
     generated_code = astor.to_source(module)
     return format_code(generated_code)
@@ -124,7 +147,7 @@ def get_code_tree_required_imports(
 
 
 def remove_class_from_code_code_tree(
-    class_node: ast.ClassDef, code_tree: Dict[str, List[ast.stmt]]
+    class_node: ast.ClassDef, code_tree: Dict[ast.stmt, List[ast.stmt]]
 ) -> None:
     """
     Remove code_tree related to a specific class from code code_tree.
@@ -145,7 +168,7 @@ def remove_class_from_code_code_tree(
             print(f"Removed {removed_count} code_tree from {key}")
 
 
-def load_code_code_tree_from_code(code: str) -> Dict[str, List[ast.stmt]]:
+def load_code_code_tree_from_code(code: str) -> Dict[ast.stmt, List[ast.stmt]]:
     """
     Load code code_tree from a given code string.
 
@@ -156,43 +179,13 @@ def load_code_code_tree_from_code(code: str) -> Dict[str, List[ast.stmt]]:
         Dict[str, List[ast.stmt]]: A dictionary of code code_tree.
     """
     tree = ast.parse(code)
-    code_tree: Dict[str, List[ast.stmt]] = {}
+    code_tree: Dict[ast.stmt, List[ast.stmt]] = {}
 
     for node in ast.walk(tree):
         if not isinstance(node, ast.stmt):
             continue
 
-        node_type = type(node).__name__
-        code_tree.setdefault(node_type, []).append(node)
-
-    # Remove unnecessary AnnAssign nodes
-    classes = get_classes(code_tree)
-    ann_assign_list = get_ann_assigns(code_tree)
-
-    if classes and ann_assign_list:
-        for cls in classes:
-            for ann_assign in cls.body:
-                if ann_assign in ann_assign_list:
-                    ann_assign_list.remove(ann_assign)
-
-    # Remove unnecessary Assign nodes
-    assign_list = get_assigns(code_tree)
-
-    if classes and assign_list:
-        for cls in classes:
-            for assign in cls.body:
-                if assign in assign_list:
-                    assign_list.remove(assign)
-
-    # Remove unnecessary Return nodes
-    function_def_list = get_functions(code_tree)
-    return_list = get_returns(code_tree)
-
-    if function_def_list and return_list:
-        for func_def in function_def_list:
-            for return_def in func_def.body:
-                if return_def in return_list:
-                    return_list.remove(return_def)
+        code_tree.setdefault(type(node), []).append(node)
 
     code_tree = {key: value for key, value in code_tree.items() if code_tree[key]}
     return code_tree
@@ -213,388 +206,253 @@ def load_code_code_tree_from_file(file_path: str) -> Dict[str, List[ast.stmt]]:
     return load_code_code_tree_from_code(code)
 
 
-# Class methods
-def get_classes(code_tree: Dict[str, List[ast.stmt]]) -> List[ast.ClassDef]:
+T = TypeVar("T", bound=ast.AST)
+
+
+def get_elements_by_type(
+    element_type: Type[T], code_tree: Dict[Type[ast.AST], List[ast.AST]]
+) -> List[T]:
     """
-    Retrieve class definitions from code_tree.
+    Retrieve elements of a specific type from the code_tree.
 
     Args:
-        code_tree (Dict[str, List[ast.stmt]]): A dictionary of code code_tree.
+        element_type (Type[T]): The type of elements to retrieve.
+        code_tree (Dict[Type[ast.AST], List[ast.AST]]): A dictionary of code elements.
 
     Returns:
-        List[ast.ClassDef]: A list of class definitions.
+        List[T]: A list of elements of the specified type.
     """
-    return code_tree.get("ClassDef", [])
+    try:
+        return code_tree[element_type]
+    except KeyError:
+        code_tree[element_type] = []
+
+    return get_elements_by_type(element_type, code_tree)
+
+
+def set_elements_by_type(
+    element_type: Type[T],
+    code_tree: Dict[Type[ast.AST], List[ast.AST]],
+    new_elements: List[T],
+) -> None:
+    """
+    Set new elements of a specific type in the code_tree.
+
+    Args:
+        element_type (Type[T]): The type of elements to update.
+        code_tree (Dict[Type[ast.AST], List[ast.AST]]): A dictionary of code elements.
+        new_elements (List[T]): The new elements to set.
+    """
+    elements = get_elements_by_type(element_type, code_tree)
+    elements.clear()
+    elements.extend(new_elements)
+
+
+def add_element(
+    element_type: Type[T], code_tree: Dict[Type[ast.AST], List[ast.AST]], new_element: T
+) -> None:
+    """
+    Add an element to the code_tree if not already present.
+
+    Args:
+        element_type (Type[T]): The type of element to add.
+        code_tree (Dict[Type[ast.AST], List[ast.AST]]): A dictionary of code elements.
+        new_element (T): The new element to add.
+    """
+    elements = get_elements_by_type(element_type, code_tree)
+    if new_element not in elements:
+        elements.append(new_element)
+
+
+def add_elements(
+    element_type: Type[T],
+    code_tree: Dict[Type[ast.AST], List[ast.AST]],
+    new_elements: List[T],
+) -> None:
+    """
+    Add multiple elements to the code_tree if not already present.
+
+    Args:
+        element_type (Type[T]): The type of elements to add.
+        code_tree (Dict[Type[ast.AST], List[ast.AST]]): A dictionary of code elements.
+        new_elements (List[T]): The new elements to add.
+    """
+    elements = get_elements_by_type(element_type, code_tree)
+    for element in new_elements:
+        if element not in elements:
+            elements.append(element)
+
+
+# Fonctions spécialisées
+
+
+# Pour ast.ClassDef
+def get_classes(code_tree: Dict[Type[ast.AST], List[ast.AST]]) -> List[ast.ClassDef]:
+    return get_elements_by_type(ast.ClassDef, code_tree)
 
 
 def set_classes(
-    code_tree: Dict[str, List[ast.stmt]], new_classes: List[ast.ClassDef]
+    code_tree: Dict[Type[ast.AST], List[ast.AST]], new_classes: List[ast.ClassDef]
 ) -> None:
-    """
-    Set new class definitions in the code_tree.
-
-    Args:
-        code_tree (Dict[str, List[ast.stmt]]): A dictionary of code code_tree.
-        new_classes (List[ast.ClassDef]): The new class definitions.
-    """
-    classes = get_classes(code_tree)
-    classes.clear()
-    add_classes(classes, new_classes)
+    set_elements_by_type(ast.ClassDef, code_tree, new_classes)
 
 
-def add_class(classes: List[ast.ClassDef], new_class: ast.ClassDef) -> None:
-    """
-    Add a class definition to the list if not already present.
-
-    Args:
-        classes (List[ast.ClassDef]): The list of class definitions.
-        new_class (ast.ClassDef): The new class definition.
-    """
-    if new_class not in classes:
-        classes.append(new_class)
+def add_class(
+    code_tree: Dict[Type[ast.AST], List[ast.AST]], new_class: ast.ClassDef
+) -> None:
+    add_element(ast.ClassDef, code_tree, new_class)
 
 
-def add_classes(classes: List[ast.ClassDef], new_classes: List[ast.ClassDef]) -> None:
-    """
-    Add multiple class definitions to the list if not already present.
-
-    Args:
-        classes (List[ast.ClassDef]): The list of class definitions.
-        new_classes (List[ast.ClassDef]): The new class definitions.
-    """
-    for cls in new_classes:
-        add_class(classes, cls)
+def add_classes(
+    code_tree: Dict[Type[ast.AST], List[ast.AST]], new_classes: List[ast.ClassDef]
+) -> None:
+    add_elements(ast.ClassDef, code_tree, new_classes)
 
 
-# Imports methods
-def get_imports(code_tree: Dict[str, List[ast.stmt]]) -> List[ast.Import]:
-    """
-    Retrieve import statements from code_tree.
-
-    Args:
-        code_tree (Dict[str, List[ast.stmt]]): A dictionary of code code_tree.
-
-    Returns:
-        List[ast.Import]: A list of import statements.
-    """
-    return code_tree.get("Import", [])
+# Pour ast.Import
+def get_imports(code_tree: Dict[Type[ast.AST], List[ast.AST]]) -> List[ast.Import]:
+    return get_elements_by_type(ast.Import, code_tree)
 
 
 def set_imports(
-    code_tree: Dict[str, List[ast.stmt]], imports: List[ast.Import]
+    code_tree: Dict[Type[ast.AST], List[ast.AST]], new_imports: List[ast.Import]
 ) -> None:
-    """
-    Set new import statements in the code_tree.
-
-    Args:
-        code_tree (Dict[str, List[ast.stmt]]): A dictionary of code code_tree.
-        imports (List[ast.Import]): The new import statements.
-    """
-    import_nodes = get_imports(code_tree)
-    import_nodes.clear()
-    add_imports(import_nodes, imports)
+    set_elements_by_type(ast.Import, code_tree, new_imports)
 
 
-def add_import(imports: List[ast.Import], new_import: ast.Import) -> None:
-    """
-    Add an import statement to the list if not already present.
-
-    Args:
-        imports (List[ast.Import]): The list of import statements.
-        new_import (ast.Import): The new import statement.
-    """
-    if new_import not in imports:
-        imports.append(new_import)
-
-
-def add_imports(imports: List[ast.Import], new_imports: List[ast.Import]) -> None:
-    """
-    Add multiple import statements to the list if not already present.
-
-    Args:
-        imports (List[ast.Import]): The list of import statements.
-        new_imports (List[ast.Import]): The new import statements.
-    """
-    for imp in new_imports:
-        add_import(imports, imp)
-
-
-# Imports from methods
-def get_from_imports(code_tree: Dict[str, List[ast.stmt]]) -> List[ast.ImportFrom]:
-    """
-    Retrieve import-from statements from code_tree.
-
-    Args:
-        code_tree (Dict[str, List[ast.stmt]]): A dictionary of code code_tree.
-
-    Returns:
-        List[ast.ImportFrom]: A list of import-from statements.
-    """
-    return code_tree.get("ImportFrom", [])
-
-
-def set_from_imports(
-    code_tree: Dict[str, List[ast.stmt]], new_imports: List[ast.ImportFrom]
+def add_import(
+    code_tree: Dict[Type[ast.AST], List[ast.AST]], new_import: ast.Import
 ) -> None:
-    """
-    Set new import-from statements in the code_tree.
-
-    Args:
-        code_tree (Dict[str, List[ast.stmt]]): A dictionary of code code_tree.
-        new_imports (List[ast.ImportFrom]): The new import-from statements.
-    """
-    from_imports = get_from_imports(code_tree)
-    from_imports.clear()
-    add_from_imports(from_imports, new_imports)
+    add_element(ast.Import, code_tree, new_import)
 
 
-def add_from_import(
-    from_imports: List[ast.ImportFrom], new_from_import: ast.ImportFrom
+def add_imports(
+    code_tree: Dict[Type[ast.AST], List[ast.AST]], new_imports: List[ast.Import]
 ) -> None:
-    """
-    Add an import-from statement to the list if not already present.
-
-    Args:
-        from_imports (List[ast.ImportFrom]): The list of import-from statements.
-        new_from_import (ast.ImportFrom): The new import-from statement.
-    """
-    if new_from_import not in from_imports:
-        from_imports.append(new_from_import)
+    add_elements(ast.Import, code_tree, new_imports)
 
 
-def add_from_imports(
-    from_imports: List[ast.ImportFrom], new_from_import: List[ast.ImportFrom]
+# Pour ast.ImportFrom
+def get_import_froms(
+    code_tree: Dict[Type[ast.AST], List[ast.AST]]
+) -> List[ast.ImportFrom]:
+    return get_elements_by_type(ast.ImportFrom, code_tree)
+
+
+def set_import_froms(
+    code_tree: Dict[Type[ast.AST], List[ast.AST]],
+    new_import_froms: List[ast.ImportFrom],
 ) -> None:
-    """
-    Add multiple import-from statements to the list if not already present.
-
-    Args:
-        from_imports (List[ast.ImportFrom]): The list of import-from statements.
-        new_from_import (List[ast.ImportFrom]): The new import-from statements.
-    """
-    for imp in new_from_import:
-        add_from_import(from_imports, imp)
+    set_elements_by_type(ast.ImportFrom, code_tree, new_import_froms)
 
 
-# Ann assign methods
-def get_ann_assigns(code_tree: Dict[str, List[ast.stmt]]) -> List[ast.AnnAssign]:
-    """
-    Retrieve annotated assignment statements from code_tree.
+def add_import_from(
+    code_tree: Dict[Type[ast.AST], List[ast.AST]], new_import_from: ast.ImportFrom
+) -> None:
+    add_element(ast.ImportFrom, code_tree, new_import_from)
 
-    Args:
-        code_tree (Dict[str, List[ast.stmt]]): A dictionary of code code_tree.
 
-    Returns:
-        List[ast.AnnAssign]: A list of annotated assignment statements.
-    """
-    return code_tree.get("AnnAssign", [])
+def add_import_froms(
+    code_tree: Dict[Type[ast.AST], List[ast.AST]],
+    new_import_froms: List[ast.ImportFrom],
+) -> None:
+    add_elements(ast.ImportFrom, code_tree, new_import_froms)
+
+
+# Pour ast.AnnAssign
+def get_ann_assigns(
+    code_tree: Dict[Type[ast.AST], List[ast.AST]]
+) -> List[ast.AnnAssign]:
+    return get_elements_by_type(ast.AnnAssign, code_tree)
 
 
 def set_ann_assigns(
-    code_tree: Dict[str, List[ast.stmt]], new_ann_assigns: List[ast.AnnAssign]
+    code_tree: Dict[Type[ast.AST], List[ast.AST]], new_ann_assigns: List[ast.AnnAssign]
 ) -> None:
-    """
-    Set new annotated assignment statements in the code_tree.
-
-    Args:
-        code_tree (Dict[str, List[ast.stmt]]): A dictionary of code code_tree.
-        new_ann_assigns (List[ast.AnnAssign]): The new annotated assignment statements.
-    """
-    ann_assigns = get_ann_assigns(code_tree)
-    ann_assigns.clear()
-    add_ann_assigns(ann_assigns, new_ann_assigns)
+    set_elements_by_type(ast.AnnAssign, code_tree, new_ann_assigns)
 
 
 def add_ann_assign(
-    ann_assigns: List[ast.AnnAssign], new_ann_assign: ast.AnnAssign
+    code_tree: Dict[Type[ast.AST], List[ast.AST]], new_ann_assign: ast.AnnAssign
 ) -> None:
-    """
-    Add an annotated assignment statement to the list if not already present.
-
-    Args:
-        ann_assigns (List[ast.AnnAssign]): The list of annotated assignment statements.
-        new_ann_assign (ast.AnnAssign): The new annotated assignment statement.
-    """
-    if new_ann_assign not in ann_assigns:
-        ann_assigns.append(new_ann_assign)
+    add_element(ast.AnnAssign, code_tree, new_ann_assign)
 
 
 def add_ann_assigns(
-    ann_assigns: List[ast.AnnAssign], new_ann_assigns: List[ast.AnnAssign]
+    code_tree: Dict[Type[ast.AST], List[ast.AST]], new_ann_assigns: List[ast.AnnAssign]
 ) -> None:
-    """
-    Add multiple annotated assignment statements to the list if not already present.
-
-    Args:
-        ann_assigns (List[ast.AnnAssign]): The list of annotated assignment statements.
-        new_ann_assigns (List[ast.AnnAssign]): The new annotated assignment statements.
-    """
-    for ann_assign in new_ann_assigns:
-        add_ann_assign(ann_assigns, ann_assign)
+    add_elements(ast.AnnAssign, code_tree, new_ann_assigns)
 
 
-# Assign methods
-def get_assigns(code_tree: Dict[str, List[ast.stmt]]) -> List[ast.Assign]:
-    """
-    Retrieve assignment statements from code_tree.
-
-    Args:
-        code_tree (Dict[str, List[ast.stmt]]): A dictionary of code code_tree.
-
-    Returns:
-        List[ast.Assign]: A list of assignment statements.
-    """
-    return code_tree.get("Assign", [])
+# Pour ast.Assign
+def get_assigns(code_tree: Dict[Type[ast.AST], List[ast.AST]]) -> List[ast.Assign]:
+    return get_elements_by_type(ast.Assign, code_tree)
 
 
 def set_assigns(
-    code_tree: Dict[str, List[ast.stmt]], new_assigns: List[ast.Assign]
+    code_tree: Dict[Type[ast.AST], List[ast.AST]], new_assigns: List[ast.Assign]
 ) -> None:
-    """
-    Set new assignment statements in the code_tree.
-
-    Args:
-        code_tree (Dict[str, List[ast.stmt]]): A dictionary of code code_tree.
-        new_assigns (List[ast.Assign]): The new assignment statements.
-    """
-    assigns = get_assigns(code_tree)
-    assigns.clear()
-    add_assigns(assigns, new_assigns)
+    set_elements_by_type(ast.Assign, code_tree, new_assigns)
 
 
-def add_assign(assigns: List[ast.Assign], new_assign: ast.Assign) -> None:
-    """
-    Add an assignment statement to the list if not already present.
-
-    Args:
-        assigns (List[ast.Assign]): The list of assignment statements.
-        new_assign (ast.Assign): The new assignment statement.
-    """
-    if new_assign not in assigns:
-        assigns.append(new_assign)
+def add_assign(
+    code_tree: Dict[Type[ast.AST], List[ast.AST]], new_assign: ast.Assign
+) -> None:
+    add_element(ast.Assign, code_tree, new_assign)
 
 
-def add_assigns(assigns: List[ast.Assign], new_assigns: List[ast.Assign]) -> None:
-    """
-    Add multiple assignment statements to the list if not already present.
-
-    Args:
-        assigns (List[ast.Assign]): The list of assignment statements.
-        new_assigns (List[ast.Assign]): The new assignment statements.
-    """
-    for assign in new_assigns:
-        add_assign(assigns, assign)
+def add_assigns(
+    code_tree: Dict[Type[ast.AST], List[ast.AST]], new_assigns: List[ast.Assign]
+) -> None:
+    add_elements(ast.Assign, code_tree, new_assigns)
 
 
-# Functions Methods
-def get_functions(code_tree: Dict[str, List[ast.stmt]]) -> List[ast.FunctionDef]:
-    """
-    Retrieve function definitions from code_tree.
-
-    Args:
-        code_tree (Dict[str, List[ast.stmt]]): A dictionary of code code_tree.
-
-    Returns:
-        List[ast.FunctionDef]: A list of function definitions.
-    """
-    return code_tree.get("FunctionDef", [])
+# Pour ast.FunctionDef
+def get_functions(
+    code_tree: Dict[Type[ast.AST], List[ast.AST]]
+) -> List[ast.FunctionDef]:
+    return get_elements_by_type(ast.FunctionDef, code_tree)
 
 
 def set_functions(
-    code_tree: Dict[str, List[ast.stmt]], new_function_defs: List[ast.FunctionDef]
+    code_tree: Dict[Type[ast.AST], List[ast.AST]], new_functions: List[ast.FunctionDef]
 ) -> None:
-    """
-    Set new function definitions in the code_tree.
-
-    Args:
-        code_tree (Dict[str, List[ast.stmt]]): A dictionary of code code_tree.
-        new_function_defs (List[ast.FunctionDef]): The new function definitions.
-    """
-    function_defs = get_functions(code_tree)
-    function_defs.clear()
-    add_functions(function_defs, new_function_defs)
+    set_elements_by_type(ast.FunctionDef, code_tree, new_functions)
 
 
 def add_function(
-    functions: List[ast.FunctionDef], new_function: ast.FunctionDef
+    code_tree: Dict[Type[ast.AST], List[ast.AST]], new_function: ast.FunctionDef
 ) -> None:
-    """
-    Add a function definition to the list if not already present.
-
-    Args:
-        functions (List[ast.FunctionDef]): The list of function definitions.
-        new_function (ast.FunctionDef): The new function definition.
-    """
-    if new_function not in functions:
-        functions.append(new_function)
+    add_element(ast.FunctionDef, code_tree, new_function)
 
 
 def add_functions(
-    functions: List[ast.FunctionDef], new_functions: List[ast.FunctionDef]
+    code_tree: Dict[Type[ast.AST], List[ast.AST]], new_functions: List[ast.FunctionDef]
 ) -> None:
-    """
-    Add multiple function definitions to the list if not already present.
-
-    Args:
-        functions (List[ast.FunctionDef]): The list of function definitions.
-        new_functions (List[ast.FunctionDef]): The new function definitions.
-    """
-    for function in new_functions:
-        add_function(functions, function)
+    add_elements(ast.FunctionDef, code_tree, new_functions)
 
 
-def get_returns(code_tree: Dict[str, List[ast.stmt]]) -> List[ast.Return]:
-    """
-    Retrieve return statements from code_tree.
-
-    Args:
-        code_tree (Dict[str, List[ast.stmt]]): A dictionary of code code_tree.
-
-    Returns:
-        List[ast.Return]: A list of return statements.
-    """
-    return code_tree.get("Return", [])
+# Pour ast.Return
+def get_returns(code_tree: Dict[Type[ast.AST], List[ast.AST]]) -> List[ast.Return]:
+    return get_elements_by_type(ast.Return, code_tree)
 
 
 def set_returns(
-    code_tree: Dict[str, List[ast.stmt]], new_returns: List[ast.Return]
+    code_tree: Dict[Type[ast.AST], List[ast.AST]], new_returns: List[ast.Return]
 ) -> None:
-    """
-    Set new return statements in the code_tree.
-
-    Args:
-        code_tree (Dict[str, List[ast.stmt]]): A dictionary of code code_tree.
-        new_returns (List[ast.Return]): The new return statements.
-    """
-    returns = get_returns(code_tree)
-    returns.clear()
-    add_returns(returns, new_returns)
+    set_elements_by_type(ast.Return, code_tree, new_returns)
 
 
-def add_return(returns: Dict[str, List[ast.stmt]], new_return: ast.Return) -> None:
-    """
-    Add a return statement to the list if not already present.
-
-    Args:
-        returns (Dict[str, List[ast.stmt]]): The list of return statements.
-        new_return (ast.Return): The new return statement.
-    """
-    if new_return not in returns:
-        returns.append(new_return)
+def add_return(
+    code_tree: Dict[Type[ast.AST], List[ast.AST]], new_return: ast.Return
+) -> None:
+    add_element(ast.Return, code_tree, new_return)
 
 
 def add_returns(
-    returns: Dict[str, List[ast.stmt]], new_returns: List[ast.Return]
+    code_tree: Dict[Type[ast.AST], List[ast.AST]], new_returns: List[ast.Return]
 ) -> None:
-    """
-    Add multiple return statements to the list if not already present.
-
-    Args:
-        returns (Dict[str, List[ast.stmt]]): The list of return statements.
-        new_returns (List[ast.Return]): The new return statements.
-    """
-    for return_node in new_returns:
-        add_return(returns, return_node)
+    add_elements(ast.Return, code_tree, new_returns)
 
 
 def get_name(node: ast.stmt) -> str:

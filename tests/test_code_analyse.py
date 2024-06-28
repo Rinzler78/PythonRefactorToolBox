@@ -46,8 +46,8 @@ class TestCodeAnalyzeHelper(unittest.TestCase):
 
     def test_should_delete_file_from_code_tree_only_imports(self):
         code_tree = {
-            "Import": [ast.Import(names=[ast.alias(name="os", asname=None)])],
-            "ImportFrom": [
+            ast.Import: [ast.Import(names=[ast.alias(name="os", asname=None)])],
+            ast.ImportFrom: [
                 ast.ImportFrom(
                     module="sys", names=[ast.alias(name="path", asname=None)]
                 )
@@ -57,13 +57,13 @@ class TestCodeAnalyzeHelper(unittest.TestCase):
 
     def test_should_delete_file_from_code_tree_mixed_code(self):
         code_tree = {
-            "import_stmt": [ast.Import(names=[ast.alias(name="os", asname=None)])],
-            "import_from_stmt": [
+            ast.Import: [ast.Import(names=[ast.alias(name="os", asname=None)])],
+            ast.ImportFrom: [
                 ast.ImportFrom(
                     module="sys", names=[ast.alias(name="path", asname=None)]
                 )
             ],
-            "function_def": [
+            ast.FunctionDef: [
                 ast.FunctionDef(
                     name="test_function",
                     args=ast.arguments(

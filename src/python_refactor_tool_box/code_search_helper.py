@@ -78,10 +78,13 @@ def find_module_dependent_files(module_name: str, current_file_path: str) -> Lis
                         continue
 
                 if any(
-                    isinstance(node, ast.ImportFrom)
-                    and node.module == module_name
-                    or any(
-                        alias.name.startswith(module_name + ".") for alias in node.names
+                    (isinstance(node, ast.ImportFrom) and node.module == module_name)
+                    or (
+                        isinstance(node, ast.Import)
+                        and any(
+                            alias.name.startswith(module_name + ".")
+                            for alias in node.names
+                        )
                     )
                     for node in ast.walk(tree)
                 ):

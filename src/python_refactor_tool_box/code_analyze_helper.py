@@ -1,7 +1,7 @@
 import ast
 from typing import Dict, List
 
-from .ast_helper import get_from_imports, get_imports
+from .ast_helper import get_import_froms, get_imports
 
 
 def should_delete_file(code: str) -> bool:
@@ -27,7 +27,9 @@ def should_delete_file(code: str) -> bool:
     )
 
 
-def should_delete_file_from_code_tree(code_tree: Dict[str, List[ast.stmt]]) -> bool:
+def should_delete_file_from_code_tree(
+    code_tree: Dict[ast.stmt, List[ast.stmt]]
+) -> bool:
     """
     Determine if a file should be deleted based on its code_tree.
 
@@ -41,10 +43,10 @@ def should_delete_file_from_code_tree(code_tree: Dict[str, List[ast.stmt]]) -> b
         return True
 
     imports = get_imports(code_tree)
-    from_imports = get_from_imports(code_tree)
+    import_froms = get_import_froms(code_tree)
 
     for key in code_tree:
-        if code_tree[key] != imports and code_tree[key] != from_imports:
+        if code_tree[key] != imports and code_tree[key] != import_froms:
             return False
 
     return True

@@ -5,21 +5,21 @@ from typing import Dict, List
 from .ast_helper import (
     add_class,
     add_classes,
-    add_from_import,
-    add_from_imports,
     add_import,
+    add_import_from,
+    add_import_froms,
     add_imports,
     create_code,
-    create_from_import,
+    create_import_from,
     get_class_required_imports,
     get_classes,
     get_code_tree_required_imports,
-    get_from_imports,
+    get_import_froms,
     get_imports,
     load_code_code_tree_from_file,
     remove_class_from_code_code_tree,
     set_classes,
-    set_from_imports,
+    set_import_froms,
     set_imports,
     update_class_imports_in_file,
     update_module_imports_in_file,
@@ -32,7 +32,7 @@ from .code_search_helper import find_class_dependent_files, find_module_dependen
 
 class SourceFile:
     __path: str = None
-    __code_tree: Dict[str, List[ast.stmt]] = None
+    __code_tree: Dict[ast.stmt, List[ast.stmt]] = None
 
     def __init__(self, path):
         self.__path = path
@@ -93,7 +93,7 @@ class SourceFile:
 
     @property
     def code_tree(self) -> Dict[str, List[ast.stmt]]:
-        if not self.__code_tree:
+        if self.__code_tree is None:
             self.__load_code_code_tree()
         return self.__code_tree
 
@@ -133,27 +133,27 @@ class SourceFile:
         add_imports(self.imports, imports)
 
     @property
-    def from_imports(self) -> List[ast.AST]:
-        return get_from_imports(self.code_tree)
+    def import_froms(self) -> List[ast.AST]:
+        return get_import_froms(self.code_tree)
 
-    @from_imports.setter
-    def from_imports(self, new_from_import: List[ast.AST]):
-        set_from_imports(self.code_tree, new_from_import)
+    @import_froms.setter
+    def import_froms(self, new_import_from: List[ast.AST]):
+        set_import_froms(self.code_tree, new_import_from)
 
-    def add_from_import(self, from_import_node: ast.ImportFrom) -> None:
-        add_from_import(self.from_imports, from_import_node)
+    def add_import_from(self, import_from_node: ast.ImportFrom) -> None:
+        add_import_from(self.import_froms, import_from_node)
 
-    def add_imports_from(self, from_imports: List[ast.ImportFrom]) -> None:
-        add_from_imports(self.from_imports, from_imports)
+    def add_imports_from(self, import_froms: List[ast.ImportFrom]) -> None:
+        add_import_froms(self.import_froms, import_froms)
 
     @property
     def all_imports(self):
-        return self.imports + self.from_imports
+        return self.imports + self.import_froms
 
     @all_imports.setter
     def all_imports(self, new_imports: List[ast.AST]):
         self.imports = [imp for imp in new_imports if isinstance(imp, ast.Import)]
-        self.from_imports = [
+        self.import_froms = [
             imp for imp in new_imports if isinstance(imp, ast.ImportFrom)
         ]
 
@@ -227,13 +227,13 @@ class SourceFile:
 
             # Create the class code
             source_file.all_imports = get_class_required_imports(
-                class_node, self.imports + self.from_imports
+                class_node, self.imports + self.import_froms
             )
             source_file.classes = [class_node]
             source_file.save()
 
             # Create the import to the class in the new module
-            new_import = create_from_import(module_name, class_name)
+            new_import = create_import_from(module_name, class_name)
             self.imports.insert(0, new_import)
 
             # Remove class form code code_tree
@@ -247,7 +247,7 @@ class SourceFile:
                 )
 
         self.all_imports = get_code_tree_required_imports(
-            self.code_tree, self.imports + self.from_imports
+            self.code_tree, self.imports + self.import_froms
         )
 
         self.save()

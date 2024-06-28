@@ -1,10 +1,9 @@
 import unittest
 
 from helper import (
-    create_samples,
+    create_sample_files,
     expected_samples_directory,
     input_samples_directory,
-    samples_directory,
 )
 
 from python_refactor_tool_box.code_compare_helper import (
@@ -15,7 +14,7 @@ from python_refactor_tool_box.code_compare_helper import (
 
 class TestCodeCompareHelper(unittest.TestCase):
     def setUp(self):
-        create_samples(samples_directory)
+        create_sample_files()
 
     def setup_method(self, method):
         self.setUp()
@@ -30,10 +29,10 @@ class TestCodeCompareHelper(unittest.TestCase):
         self.assertTrue(compare_from_code(code1, code2))
 
     def test_compare_codes_from_files_same_files(self):
-        file_path = input_samples_directory + "/blop.py"
+        file_path = input_samples_directory + "/main.py"
         self.assertTrue(compare_codes_from_files(str(file_path), str(file_path)))
 
     def test_compare_codes_from_files_different_files(self):
-        file_path1 = input_samples_directory + "/blop.py"
-        file_path2 = expected_samples_directory + "/coca.py"
+        file_path1 = input_samples_directory + "/main.py"
+        file_path2 = expected_samples_directory + "/utils/helper.py"
         self.assertFalse(compare_codes_from_files(str(file_path1), str(file_path2)))

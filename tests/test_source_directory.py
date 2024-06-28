@@ -1,7 +1,7 @@
 import unittest
 
 from helper import (
-    create_samples,
+    create_sample_files,
     expected_samples_directory,
     input_samples_directory,
     samples_directory,
@@ -12,7 +12,7 @@ from python_refactor_tool_box import SourceDirectory
 
 class TestSourceDirectory(unittest.TestCase):
     def setUp(self):
-        create_samples(samples_directory)
+        create_sample_files()
 
     def setup_method(self, method):
         self.setUp()
