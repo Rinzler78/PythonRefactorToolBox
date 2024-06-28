@@ -14,7 +14,7 @@ class TestSnakeCase(unittest.TestCase):
     def test_normal_case(self):
         self.assertEqual(
             to_snake_case("ConvertirCetteChaine En_Snake-Case!"),
-            "convertir_cette_chaine_en_snake_case",
+            "convertir_cette_chaine_en_snake_case!",
         )
 
     def test_single_word_lowercase(self):
@@ -30,12 +30,12 @@ class TestSnakeCase(unittest.TestCase):
 
     def test_with_special_characters(self):
         self.assertEqual(
-            to_snake_case("Special@Characters#Example!"), "special_characters_example"
+            to_snake_case("Special@Characters#Example!"), "special_characters_example!"
         )
 
     def test_numeric_and_alphabets(self):
         self.assertEqual(
-            to_snake_case("Num3r1c4l and Alph4b3t!"), "num3r1c4l_and_alph4b3t"
+            to_snake_case("Num3r1c4l and Alph4b3t!"), "num3r1c4l_and_alph4b3t!"
         )
 
     def test_leading_and_trailing_spaces(self):
@@ -64,13 +64,13 @@ class TestSnakeCase(unittest.TestCase):
         self.assertEqual(to_snake_case("     "), "")
 
     def test_underscores_only(self):
-        self.assertEqual(to_snake_case("_____"), "")
+        self.assertEqual(to_snake_case("_____"), "_____")
 
     def test_numbers_only(self):
         self.assertEqual(to_snake_case("123456"), "123456")
 
     def test_special_characters_only(self):
-        self.assertEqual(to_snake_case("@#$%^&*()"), "")
+        self.assertEqual(to_snake_case("@#$%^&*()"), "@#$%^&*()")
 
     def test_mixed_case_with_underscores(self):
         self.assertEqual(
@@ -100,19 +100,19 @@ class TestSnakeCase(unittest.TestCase):
         self.assertEqual(to_snake_case(None), None)
 
     def test_double_underscore_init(self):
-        self.assertEqual(to_snake_case("__init__"), "init")
+        self.assertEqual(to_snake_case("__init__"), "__init__")
 
     def test_double_underscore_Init(self):
-        self.assertEqual(to_snake_case("__Init__"), "init")
+        self.assertEqual(to_snake_case("__Init__"), "__init__")
 
     def test_double_underscore_INIT(self):
-        self.assertEqual(to_snake_case("__INIT__"), "init")
+        self.assertEqual(to_snake_case("__INIT__"), "__init__")
 
     def test_double_underscore_INITok(self):
-        self.assertEqual(to_snake_case("__INITok__"), "ini_tok")
+        self.assertEqual(to_snake_case("__INITok__"), "__ini_tok__")
 
     def test_double_underscore_INIT_ok(self):
-        self.assertEqual(to_snake_case("__INIT_ok__"), "init_ok")
+        self.assertEqual(to_snake_case("__INIT_ok__"), "__init_ok__")
 
     def test_single_word_capitalized(self):
         self.assertEqual(to_snake_case("Toto"), "toto")

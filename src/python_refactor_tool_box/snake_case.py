@@ -1,7 +1,7 @@
 import re
 
 
-def to_snake_case(name):
+def to_snake_case(name: str):
     # If the input is None or an empty string, return it as is
     if not name:
         return name
@@ -13,6 +13,26 @@ def to_snake_case(name):
     if not name:
         return name
 
+    start_index = 0
+    word_len = len(name)
+    end_index = word_len - 1
+
+    while start_index < word_len and not name[start_index].isalnum():
+        start_index += 1
+
+    if start_index >= word_len:
+        return name
+
+    while end_index > start_index and not name[end_index].isalnum():
+        end_index -= 1
+
+    if start_index > 0 or end_index < word_len - 1:
+        # Remove leading and trailing non-alphanumeric characters
+        inner_name = name[start_index : end_index + 1]
+        converted_inner_name = to_snake_case(inner_name)
+
+        return name.replace(inner_name, converted_inner_name)
+
     # Replace hyphens and multiple spaces with underscores
     # Remove special characters
     name = re.sub(r"[-\s]+", "_", name)
@@ -23,8 +43,8 @@ def to_snake_case(name):
         return name
 
     words = []
-    word_len = len(name)
     start_index = 0
+    word_len = len(name)
     end_index = 0
 
     # Process the string to extract words based on case and digits
