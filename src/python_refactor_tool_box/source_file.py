@@ -3,22 +3,38 @@ import os
 from typing import Dict, List
 
 from .ast_helper import (
+    add_ann_assign,
+    add_ann_assigns,
+    add_assign,
+    add_assigns,
     add_class,
     add_classes,
+    add_expr,
+    add_exprs,
+    add_function,
+    add_functions,
     add_import,
     add_import_from,
     add_import_froms,
     add_imports,
-    create_code,
     create_import_from,
-    get_class_required_imports,
+    generate_code_from_tree,
+    generate_code_tree_for_class,
+    get_ann_assigns,
+    get_assigns,
     get_classes,
     get_code_tree_required_imports,
+    get_exprs,
+    get_functions,
     get_import_froms,
     get_imports,
     load_code_code_tree_from_file,
-    remove_class_from_code_code_tree,
+    remove_class_from_code_tree,
+    set_ann_assigns,
+    set_assigns,
     set_classes,
+    set_exprs,
+    set_functions,
     set_import_froms,
     set_imports,
     update_class_imports_in_file,
@@ -85,7 +101,7 @@ class SourceFile:
 
     def save(self) -> bool:
         print(f"Saving file {self.path}")
-        code = create_code(self.code_tree)
+        code = generate_code_from_tree(self.code_tree)
 
         with open(self.path, "w") as file:
             file.write(code)
@@ -96,6 +112,10 @@ class SourceFile:
         if self.__code_tree is None:
             self.__load_code_code_tree()
         return self.__code_tree
+
+    @code_tree.setter
+    def code_tree(self, new_code_tree: Dict[str, List[ast.stmt]]):
+        self.__code_tree = new_code_tree
 
     @property
     def classes(self) -> List[ast.ClassDef]:
@@ -112,7 +132,7 @@ class SourceFile:
         add_classes(self.classes, classes)
 
     def remove_class(self, class_node: ast.ClassDef) -> None:
-        remove_class_from_code_code_tree(class_node, self.code_tree)
+        remove_class_from_code_tree(class_node, self.code_tree)
 
     def remove_classes(self, classes: List[ast.ClassDef]) -> None:
         for class_node in classes:
@@ -156,6 +176,62 @@ class SourceFile:
         self.import_froms = [
             imp for imp in new_imports if isinstance(imp, ast.ImportFrom)
         ]
+
+    @property
+    def function_defs(self):
+        return get_functions(self.code_tree)
+
+    @function_defs.setter
+    def function_defs(self, new_function_defs: List[ast.FunctionDef]):
+        set_functions(self.code_tree, new_function_defs)
+
+    def add_function_def(self, function_def_node: ast.FunctionDef) -> None:
+        add_function(self.function_defs, function_def_node)
+
+    def add_function_defs(self, function_defs: List[ast.FunctionDef]) -> None:
+        add_functions(self.function_defs, function_defs)
+
+    @property
+    def assigns(self):
+        return get_assigns(self.code_tree)
+
+    @assigns.setter
+    def assigns(self, new_assigns: List[ast.Assign]):
+        set_assigns(self.code_tree, new_assigns)
+
+    def add_assign(self, assign_node: ast.Assign) -> None:
+        add_assign(self.assigns, assign_node)
+
+    def add_assigns(self, assigns: List[ast.Assign]) -> None:
+        add_assigns(self.assigns, assigns)
+
+    @property
+    def ann_assigns(self):
+        return get_ann_assigns(self.code_tree)
+
+    @ann_assigns.setter
+    def ann_assigns(self, new_ann_assigns: List[ast.AnnAssign]):
+        set_ann_assigns(self.code_tree, new_ann_assigns)
+
+    def add_ann_assign(self, ann_assign_node: ast.AnnAssign) -> None:
+        add_ann_assign(self.ann_assigns, ann_assign_node)
+
+    def add_ann_assigns(self, ann_assigns: List[ast.AnnAssign]) -> None:
+        add_ann_assigns(self.ann_assigns, ann_assigns)
+
+    @property
+    def exprs(self):
+        return get_exprs(self.code_tree)
+
+    @exprs.setter
+    def exprs(self, new_exprs: List[ast.Expr]):
+        set_exprs(self.code_tree, new_exprs)
+
+    def add_expr(self, expr_node: ast.Expr) -> None:
+        add_expr(self.code_tree, expr_node)
+
+    def add_exprs(self, exprs: List[ast.Expr]) -> None:
+        add_exprs(self.code_tree, exprs)
 
     def move_to_module(self, target_module_name: str) -> bool:
         if not self.is_exists:
@@ -226,10 +302,10 @@ class SourceFile:
                 continue
 
             # Create the class code
-            source_file.all_imports = get_class_required_imports(
-                class_node, self.imports + self.import_froms
+            class_code_tree = generate_code_tree_for_class(
+                class_node, self.code_tree, module_name
             )
-            source_file.classes = [class_node]
+            source_file.code_tree = class_code_tree
             source_file.save()
 
             # Create the import to the class in the new module
